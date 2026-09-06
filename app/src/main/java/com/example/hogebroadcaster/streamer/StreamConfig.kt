@@ -1,5 +1,7 @@
 package com.example.hogebroadcaster.streamer
 
+import android.media.MediaCodecInfo
+
 /**
  * 配信に関する定数を一元管理する。
  *
@@ -13,6 +15,16 @@ object StreamConfig {
     const val DEFAULT_WIDTH = 1280
     const val DEFAULT_HEIGHT = 720
     const val DEFAULT_VIDEO_BITRATE = 3_000_000 // bps
+
+    /**
+     * H.264 Constrained Baseline。
+     * Bフレームなし・参照フレーム少なめで、古いPCプレーヤーとの互換性が最も高い。
+     * API 21+ で利用可 (minSdk 26 のため常時利用可)。
+     */
+    const val VIDEO_PROFILE = MediaCodecInfo.CodecProfileLevel.AVCProfileConstrainedBaseline
+
+    /** キーフレーム間隔 (秒)。短めにして途中参加時の復帰を早くする */
+    const val VIDEO_KEYFRAME_INTERVAL_SEC = 2
 
     // ---- Audio ----
     const val AUDIO_SAMPLE_RATE = 32000

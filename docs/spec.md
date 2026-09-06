@@ -65,9 +65,18 @@ RTMP push で配信するための Android アプリ。
 | 設定保存 | SharedPreferences (`hoge_broadcaster`) |
 | 依存取得 | JitPack (`com.github.pedroSG94.RootEncoder`) |
 
-エンコードは H.264 (映像) + AAC (音声) のデフォルト設定とし、
-PeerCast の FLV 受けと互換性のある組み合わせに固定する。
+エンコードは H.264 (映像) + AAC-LC (音声) に固定し、
+PeerCast の FLV 受け・古いPCプレーヤーとの互換性を優先する。
 コーデック選択UIは持たない。
+
+| 項目 | 設定 | 備考 |
+|------|------|------|
+| 映像コーデック | H.264 (`VideoCodec.H264` を明示) | |
+| プロファイル | Constrained Baseline (`AVCProfileConstrainedBaseline`) | Bフレームなし、古いデコーダに最も安全 |
+| Level | 解像度・FPSから自動選定 (`H264Level`) | MaxMBPS基準 (720p30→3.1、1080p30→4.0)。過剰なLevelを付けない |
+| キーフレーム間隔 | 2秒 (`iFrameInterval=2`) | 途中参加時の復帰を早くする |
+| 音声コーデック | AAC-LC (`AudioCodec.AAC` を明示。HE-AACではない) | |
+| FPS | 30固定 | |
 
 ## 5. 配信プロトコル仕様
 

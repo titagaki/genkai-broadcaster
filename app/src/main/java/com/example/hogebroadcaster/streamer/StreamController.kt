@@ -8,9 +8,11 @@ import android.view.SurfaceView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.example.hogebroadcaster.StreamService
+import com.pedro.common.AudioCodec
 import com.pedro.common.ConnectChecker
 import com.pedro.common.StreamingStatsReport
 import com.pedro.common.Throughput
+import com.pedro.common.VideoCodec
 import com.pedro.common.onMainThreadHandler
 import com.pedro.encoder.input.sources.audio.MicrophoneSource
 import com.pedro.encoder.input.sources.video.Camera2Source
@@ -50,6 +52,9 @@ class StreamController(context: Context) : ConnectChecker {
         genericStream = GenericStream(appContext, this).apply {
             getGlInterface().autoHandleOrientation = true
             getStreamClient().setReTries(StreamConfig.RETRY_COUNT)
+            // 互換性のため明示: H.264 + AAC-LC (HE-AAC ではない)
+            setVideoCodec(VideoCodec.H264)
+            setAudioCodec(AudioCodec.AAC)
         }
         (genericStream?.audioSource as? MicrophoneSource)?.setAudioEffect(levelEffect)
     }
@@ -121,7 +126,10 @@ class StreamController(context: Context) : ConnectChecker {
             genericStream?.prepareVideo(
                 width, height, videoBitrate,
                 fps = StreamConfig.VIDEO_FPS,
-                rotation = StreamConfig.VIDEO_ROTATION
+                iFrameInterval = StreamConfig.VIDEO_KEYFRAME_INTERVAL_SEC,
+                rotation = StreamConfig.VIDEO_ROTATION,
+                profile = StreamConfig.VIDEO_PROFILE,
+                level = H264Level.select(width, height, StreamConfig.VIDEO_FPS)
             ) == true &&
                 genericStream?.prepareAudio(
                     StreamConfig.AUDIO_SAMPLE_RATE,
@@ -145,7 +153,14 @@ class StreamController(context: Context) : ConnectChecker {
                 StreamConfig.DEFAULT_HEIGHT,
                 StreamConfig.DEFAULT_VIDEO_BITRATE,
                 fps = StreamConfig.VIDEO_FPS,
-                rotation = StreamConfig.VIDEO_ROTATION
+                iFrameInterval = StreamConfig.VIDEO_KEYFRAME_INTERVAL_SEC,
+                rotation = StreamConfig.VIDEO_ROTATION,
+                profile = StreamConfig.VIDEO_PROFILE,
+                level = H264Level.select(
+                    StreamConfig.DEFAULT_WIDTH,
+                    StreamConfig.DEFAULT_HEIGHT,
+                    StreamConfig.VIDEO_FPS
+                )
             ) == true &&
                 genericStream?.prepareAudio(
                     StreamConfig.AUDIO_SAMPLE_RATE,
