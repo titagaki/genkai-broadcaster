@@ -14,6 +14,7 @@ object StreamConfig {
     const val PORTRAIT_ROTATION = 90
     const val DEFAULT_PORTRAIT = false // 既存の横長出力を維持
     const val VIDEO_FPS = 30
+    const val CAMERA_SWITCH_TIMEOUT_MS = 5000L
 
     /**
      * H.264 Constrained Baseline。

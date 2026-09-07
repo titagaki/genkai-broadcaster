@@ -68,7 +68,6 @@ fun AppRoot(
                 controller = controller,
                 prefs = prefs,
                 portrait = portrait,
-                onPortraitChanged = changeOrientation,
                 onOpenSettings = { showSettings = true },
                 onRequestPermissions = onRequestPermissions
             )

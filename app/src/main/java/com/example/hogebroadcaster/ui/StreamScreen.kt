@@ -4,49 +4,39 @@ import android.content.SharedPreferences
 import android.os.SystemClock
 import android.view.SurfaceView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.FlashlightOff
-import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -60,43 +50,48 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.example.hogebroadcaster.streamer.LensOption
+import com.example.hogebroadcaster.streamer.CameraZoomChoice
+import com.example.hogebroadcaster.streamer.CameraZoomState
 import com.example.hogebroadcaster.streamer.RESOLUTIONS
 import com.example.hogebroadcaster.streamer.StreamConfig
 import com.example.hogebroadcaster.streamer.StreamController
 import com.example.hogebroadcaster.streamer.StreamPrefs
+import com.example.hogebroadcaster.system.BatteryInfo
 import com.example.hogebroadcaster.system.BatteryMonitor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.roundToInt
 
-/** 送信フレーム全体を見せるビューと、縦横で配置を変える操作パネル。 */
+/** 全面カメラプレビューへ配信情報と操作を重ねる配信画面。 */
 @Composable
 fun StreamScreen(
     controller: StreamController,
     prefs: SharedPreferences,
     portrait: Boolean,
-    onPortraitChanged: (Boolean) -> Unit,
     onOpenSettings: () -> Unit,
     onRequestPermissions: () -> Unit
 ) {
     val streamState by controller.state.collectAsState()
     var urlError by remember { mutableStateOf<String?>(null) }
-    val status = urlError ?: streamState.status
+    val status = urlError ?: streamState.cameraError ?: streamState.status
     val resolution = remember(prefs) { RESOLUTIONS[StreamPrefs.loadResIndex(prefs)] }
     val dimensions = resolution.dimensions(portrait)
-    val aspectRatio = resolution.outputWidth(portrait).toFloat() / resolution.outputHeight(portrait)
-    var torchOn by remember { mutableStateOf(controller.isTorchOn()) }
-    var isFront by remember { mutableStateOf(controller.isFrontCamera()) }
-    var lensId by remember { mutableStateOf(controller.currentLensId()) }
+    val selectedLens = streamState.selectedLens ?: controller.currentLens()
+    val isFront = selectedLens?.isFront ?: controller.isFrontCamera()
     var showCameraMenu by remember { mutableStateOf(false) }
-    val lenses = remember(streamState.previewReady) { controller.listLenses() }
     var meterLevel by remember { mutableFloatStateOf(0f) }
+    var gestureZoomRatio by remember { mutableFloatStateOf(streamState.zoom.ratio) }
     val startedAtMs = streamState.startedAtMs
     var streamSeconds by remember(startedAtMs) {
         mutableLongStateOf(startedAtMs?.let { (SystemClock.elapsedRealtime() - it) / 1000 } ?: 0L)
@@ -119,10 +114,8 @@ fun StreamScreen(
             delay(100)
         }
     }
-    LaunchedEffect(streamState.previewReady) {
-        isFront = controller.isFrontCamera()
-        lensId = controller.currentLensId()
-        torchOn = controller.isTorchOn()
+    LaunchedEffect(streamState.zoom.ratio) {
+        gestureZoomRatio = streamState.zoom.ratio
     }
     LaunchedEffect(appContext) {
         while (isActive) {
@@ -131,322 +124,364 @@ fun StreamScreen(
         }
     }
 
-    val controls: @Composable (Boolean, Modifier) -> Unit = { compact, modifier ->
-        ControlPanel(
-            isStreaming = streamState.isStreaming,
-            portrait = portrait,
-            onPortraitChanged = onPortraitChanged,
-            isFront = isFront,
-            torchOn = torchOn,
-            muted = streamState.muted,
-            cameraReady = streamState.previewReady,
-            status = status,
-            compact = compact,
-            onOpenCameraMenu = { showCameraMenu = true },
-            onToggleTorch = {
-                controller.setTorch(!torchOn)
-                torchOn = controller.isTorchOn()
-            },
-            onToggleMute = { controller.toggleMute(!streamState.muted) },
-            onToggleStream = {
-                urlError = null
-                if (controller.isStreamingNow()) {
-                    controller.stopStream()
-                } else {
-                    val url = StreamPrefs.buildFullUrl(prefs)
-                    if (url.startsWith("rtmp://")) controller.startStream(url)
-                    else urlError = "配信先URLが不正です。右上の設定を確認してください"
-                }
-            },
-            modifier = modifier
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        AndroidView(
+            factory = { context -> SurfaceView(context).also { controller.attachSurface(it) } },
+            onRelease = { controller.detachSurface(it) },
+            modifier = Modifier.fillMaxSize()
         )
-    }
-
-    Column(
-        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding()
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                LiveBadge(
-                    isStreaming = streamState.isConnected,
-                    text = if (streamState.isConnected) {
-                        "LIVE  ${"%02d:%02d".format(streamSeconds / 60, streamSeconds % 60)}"
-                    } else status
-                )
-                Text(
-                    "$dimensions / ${StreamConfig.VIDEO_FPS} fps" +
-                        if (streamState.stats.isNotEmpty()) " / ${streamState.stats}" else " / RTMP",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (battery.percent >= 0) {
-                Text(
-                    "${battery.percent}%" + if (battery.isCharging) " 充電中" else "",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = 88.dp)
-                )
-            }
-            IconButton(onClick = onOpenSettings, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Filled.Settings, contentDescription = "配信設定", tint = MaterialTheme.colorScheme.onSurface)
-            }
-        }
-        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
-            if (maxWidth > maxHeight) {
-                Row(Modifier.fillMaxSize()) {
-                    StreamPreview(
-                        controller, aspectRatio, portrait, streamState.previewReady,
-                        meterLevel, onRequestPermissions, Modifier.weight(1f).fillMaxHeight()
-                    )
-                    controls(true, Modifier.width((this@BoxWithConstraints.maxWidth * 0.34f).coerceIn(180.dp, 264.dp)).fillMaxHeight())
-                }
-            } else {
-                Column(Modifier.fillMaxSize()) {
-                    StreamPreview(
-                        controller, aspectRatio, portrait, streamState.previewReady,
-                        meterLevel, onRequestPermissions, Modifier.weight(1f).fillMaxWidth()
-                    )
-                    controls(false, Modifier.fillMaxWidth().heightIn(max = this@BoxWithConstraints.maxHeight * 0.48f))
-                }
-            }
-        }
-    }
-
-    if (showCameraMenu) {
-        CameraMenuSheet(
-            isFront = isFront,
-            lensId = lensId,
-            frontLens = lenses.firstOrNull { it.isFront },
-            backLenses = lenses.filter { !it.isFront },
-            onSelectFront = {
-                controller.selectCamera(true)
-                isFront = controller.isFrontCamera()
-                lensId = controller.currentLensId()
-                torchOn = controller.isTorchOn()
-                showCameraMenu = false
-            },
-            onSelectBack = {
-                controller.selectCamera(false)
-                isFront = controller.isFrontCamera()
-                lensId = controller.currentLensId()
-                torchOn = controller.isTorchOn()
-                showCameraMenu = false
-            },
-            onSelectLens = { id ->
-                if (controller.openLens(id)) {
-                    lensId = id
-                    isFront = controller.isFrontCamera()
-                    torchOn = controller.isTorchOn()
-                }
-                showCameraMenu = false
-            },
-            onDismiss = { showCameraMenu = false }
-        )
-    }
-}
-
-@Composable
-private fun StreamPreview(
-    controller: StreamController,
-    aspectRatio: Float,
-    portrait: Boolean,
-    ready: Boolean,
-    meterLevel: Float,
-    onRequestPermissions: () -> Unit,
-    modifier: Modifier
-) {
-    BoxWithConstraints(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
-        val frameWidth = minOf(maxWidth, maxHeight * aspectRatio)
-        val frameHeight = frameWidth / aspectRatio
-        Box(Modifier.size(frameWidth, frameHeight).border(1.dp, Color(0xFF424C46))) {
-            AndroidView(
-                factory = { ctx -> SurfaceView(ctx).also { controller.attachSurface(it) } },
-                onRelease = { controller.detachSurface(it) },
-                modifier = Modifier.fillMaxSize()
-            )
-            Text(
-                if (portrait) "縦配信 / 9:16" else "横配信 / 16:9",
-                modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
-                    .background(Color(0xAA101413), RoundedCornerShape(4.dp)).padding(6.dp),
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            AudioMeter(
-                level = meterLevel,
-                modifier = Modifier.align(Alignment.BottomStart).padding(12.dp)
-            )
-        }
-        if (!ready) {
-            Column(
-                Modifier.padding(16.dp).background(Color(0xE6101413), RoundedCornerShape(12.dp))
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text("プレビュー準備中", color = Color.White, style = MaterialTheme.typography.titleSmall)
-                if (!controller.hasPermissions()) {
-                    OutlinedButton(onClick = onRequestPermissions) { Text("カメラ・マイクを許可") }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ControlPanel(
-    isStreaming: Boolean,
-    portrait: Boolean,
-    onPortraitChanged: (Boolean) -> Unit,
-    isFront: Boolean,
-    torchOn: Boolean,
-    muted: Boolean,
-    cameraReady: Boolean,
-    status: String,
-    compact: Boolean,
-    onOpenCameraMenu: () -> Unit,
-    onToggleTorch: () -> Unit,
-    onToggleMute: () -> Unit,
-    onToggleStream: () -> Unit,
-    modifier: Modifier
-) {
-    val tools: @Composable (Modifier) -> Unit = { itemModifier ->
-        QuickControl(Icons.Filled.PhotoCamera, if (isFront) "前面カメラ" else "背面・レンズ",
-            false, cameraReady, compact, onOpenCameraMenu, itemModifier)
-        QuickControl(if (torchOn) Icons.Filled.FlashlightOn else Icons.Filled.FlashlightOff,
-            if (torchOn) "ライトON" else "ライトOFF", torchOn, cameraReady && !isFront,
-            compact, onToggleTorch, itemModifier)
-        QuickControl(if (muted) Icons.Filled.MicOff else Icons.Filled.Mic,
-            if (muted) "ミュート中" else "マイクON", muted, cameraReady || isStreaming,
-            compact, onToggleMute, itemModifier, warning = muted)
-    }
-    Column(modifier.background(MaterialTheme.colorScheme.surface).padding(12.dp)) {
-        Column(
-            Modifier.weight(1f, fill = compact).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Text("配信方向", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            OrientationPicker(portrait, !isStreaming, onPortraitChanged)
-            if (isStreaming) {
-                Text("方向の変更は配信停止後にできます", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (compact) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { tools(Modifier.fillMaxWidth()) }
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { tools(Modifier.weight(1f)) }
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        Button(
-            onClick = onToggleStream,
-            enabled = isStreaming || cameraReady,
-            shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (isStreaming) Color(0xFFB43832) else MaterialTheme.colorScheme.primary,
-                contentColor = if (isStreaming) Color.White else MaterialTheme.colorScheme.onPrimary
-            ),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
-        ) {
-            Icon(if (isStreaming) Icons.Filled.Stop else Icons.Filled.PlayArrow, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text(if (isStreaming) "配信を停止" else "配信を開始", fontWeight = FontWeight.Bold)
-        }
-        if (status != "LIVE" && status != "待機中" && status != "切断") {
-            Text(status, modifier = Modifier.padding(top = 8.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
-@Composable
-private fun QuickControl(
-    icon: ImageVector,
-    label: String,
-    active: Boolean,
-    enabled: Boolean,
-    compact: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier,
-    warning: Boolean = false
-) {
-    Button(
-        onClick = onClick, enabled = enabled,
-        modifier = modifier.heightIn(min = 48.dp),
-        shape = RoundedCornerShape(10.dp),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = when {
-                warning -> MaterialTheme.colorScheme.errorContainer
-                active -> MaterialTheme.colorScheme.primaryContainer
-                else -> MaterialTheme.colorScheme.surfaceVariant
-            },
-            contentColor = when {
-                warning -> MaterialTheme.colorScheme.onErrorContainer
-                active -> MaterialTheme.colorScheme.onPrimaryContainer
-                else -> MaterialTheme.colorScheme.onSurface
-            }
-        )
-    ) {
-        if (compact) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-        } else {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
-                Text(label, style = MaterialTheme.typography.labelMedium)
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CameraMenuSheet(
-    isFront: Boolean,
-    lensId: String?,
-    frontLens: LensOption?,
-    backLenses: List<LensOption>,
-    onSelectFront: () -> Unit,
-    onSelectBack: () -> Unit,
-    onSelectLens: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
-        Column(Modifier.verticalScroll(rememberScrollState())) {
-            Text("カメラとレンズ", style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
-            CameraMenuItem(if (frontLens != null) "前面 ${frontLens.label}" else "前面カメラ", isFront, onSelectFront)
-            if (backLenses.isEmpty()) {
-                CameraMenuItem("背面カメラ", !isFront, onSelectBack)
-            } else {
-                backLenses.forEach { lens ->
-                    CameraMenuItem("背面 ${lens.label}", !isFront && lens.cameraId == lensId) {
-                        onSelectLens(lens.cameraId)
+        Box(
+            Modifier.fillMaxSize().pointerInput(controller, streamState.previewReady) {
+                if (!streamState.previewReady) return@pointerInput
+                detectTransformGestures { _, _, zoomChange, _ ->
+                    if (zoomChange.isFinite() && zoomChange != 1f) {
+                        gestureZoomRatio = controller.setZoomRatio(gestureZoomRatio * zoomChange)
                     }
                 }
             }
-            Spacer(Modifier.height(24.dp))
+        ) {}
+
+        BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+            val compactControls = maxHeight < 400.dp
+            StreamInfo(
+                status = status,
+                dimensions = dimensions,
+                stats = streamState.stats,
+                streamSeconds = streamSeconds,
+                showStreamTime = startedAtMs != null,
+                battery = battery,
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 12.dp, end = 72.dp)
+            )
+
+            OverlayIconButton(
+                icon = Icons.Filled.Settings,
+                contentDescription = "配信設定",
+                onClick = onOpenSettings,
+                compact = compactControls,
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
+            )
+
+            AudioMeter(
+                level = meterLevel,
+                modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp)
+            )
+
+            OverlayIconButton(
+                icon = if (streamState.muted) Icons.Filled.MicOff else Icons.Filled.Mic,
+                contentDescription = if (streamState.muted) "マイクをON" else "マイクをOFF",
+                label = if (streamState.muted) "OFF" else "ON",
+                active = streamState.muted,
+                enabled = streamState.previewReady || streamState.isStreaming,
+                compact = compactControls,
+                onClick = { controller.toggleMute(!streamState.muted) },
+                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 12.dp)
+            )
+
+            Column(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(if (compactControls) 8.dp else 12.dp)
+            ) {
+                CameraZoomSelector(
+                    isFront = isFront,
+                    zoom = streamState.zoom,
+                    choices = controller.cameraZoomChoices(isFront),
+                    expanded = showCameraMenu,
+                    enabled = streamState.previewReady || streamState.cameraError != null,
+                    onExpandedChange = { showCameraMenu = it },
+                    onSelectFacing = { controller.selectCamera(it) },
+                    onSelectZoom = controller::selectCameraZoom
+                )
+                StreamButton(
+                    isStreaming = streamState.isStreaming,
+                    enabled = streamState.isStreaming || streamState.previewReady,
+                    compact = compactControls,
+                    onClick = {
+                        urlError = null
+                        if (controller.isStreamingNow()) {
+                            controller.stopStream()
+                        } else {
+                            val url = StreamPrefs.buildFullUrl(prefs)
+                            if (url.startsWith("rtmp://")) controller.startStream(url)
+                            else urlError = "配信先URLが不正です"
+                        }
+                    }
+                )
+            }
+        }
+
+        if (!streamState.previewReady) {
+            PreviewUnavailable(
+                hasPermissions = controller.hasPermissions(),
+                cameraError = streamState.cameraError,
+                onRequestPermissions = onRequestPermissions,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
+    }
+
+}
+
+@Composable
+private fun StreamInfo(
+    status: String,
+    dimensions: String,
+    stats: String,
+    streamSeconds: Long,
+    showStreamTime: Boolean,
+    battery: BatteryInfo,
+    modifier: Modifier = Modifier
+) {
+    val details = buildList {
+        if (showStreamTime) {
+            val hours = streamSeconds / 3600
+            val minutes = streamSeconds / 60 % 60
+            add(
+                if (hours > 0) "%02d:%02d:%02d".format(hours, minutes, streamSeconds % 60)
+                else "%02d:%02d".format(minutes, streamSeconds % 60)
+            )
+        }
+        if (stats.isNotEmpty()) add(stats)
+        if (battery.percent >= 0) add("${battery.percent}%${if (battery.isCharging) " 充電中" else ""}")
+    }.joinToString(" / ")
+    Column(
+        modifier = modifier.widthIn(max = 320.dp)
+            .background(Color(0x99101413), RoundedCornerShape(6.dp))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(
+            "$status / $dimensions / ${StreamConfig.VIDEO_FPS} fps",
+            color = Color.White,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (details.isNotEmpty()) {
+            Text(
+                details,
+                color = Color(0xFFD4DDD7),
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
 
 @Composable
-private fun CameraMenuItem(label: String, selected: Boolean, onClick: () -> Unit) {
-    ListItem(
-        headlineContent = { Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) },
-        trailingContent = { RadioButton(selected = selected, onClick = onClick) },
-        modifier = Modifier.clickable(onClick = onClick)
-    )
+private fun OverlayIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    active: Boolean = false,
+    enabled: Boolean = true,
+    compact: Boolean = false
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Button(
+            onClick = onClick,
+            enabled = enabled,
+            shape = CircleShape,
+            contentPadding = PaddingValues(0.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (active) Color(0xFFD1433E) else Color(0xAA101413),
+                contentColor = Color.White,
+                disabledContainerColor = Color(0x66101413),
+                disabledContentColor = Color(0x88FFFFFF)
+            ),
+            modifier = Modifier.size(if (compact) 44.dp else 52.dp)
+        ) {
+            Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(if (compact) 22.dp else 25.dp))
+        }
+        if (label != null && !compact) {
+            Text(
+                label,
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 3.dp)
+                    .background(Color(0x99101413), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 5.dp, vertical = 1.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun StreamButton(
+    isStreaming: Boolean,
+    enabled: Boolean,
+    compact: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Button(
+            onClick = onClick,
+            enabled = enabled,
+            shape = CircleShape,
+            contentPadding = PaddingValues(0.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isStreaming) Color(0xFFB43832) else Color(0xFF2E7D4F),
+                contentColor = Color.White
+            ),
+            modifier = Modifier.size(if (compact) 68.dp else 82.dp)
+        ) {
+            Icon(
+                if (isStreaming) Icons.Filled.Stop else Icons.Filled.PlayArrow,
+                contentDescription = if (isStreaming) "配信を停止" else "配信を開始",
+                modifier = Modifier.size(if (compact) 32.dp else 38.dp)
+            )
+        }
+        if (!compact) {
+            Text(
+                if (isStreaming) "配信停止" else "配信開始",
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 5.dp)
+                    .background(Color(0x99101413), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 7.dp, vertical = 2.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun PreviewUnavailable(
+    hasPermissions: Boolean,
+    cameraError: String?,
+    onRequestPermissions: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.background(Color(0xDD101413), RoundedCornerShape(12.dp)).padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(cameraError ?: "プレビュー準備中", color = Color.White, style = MaterialTheme.typography.titleSmall)
+        if (!hasPermissions) {
+            OutlinedButton(onClick = onRequestPermissions) { Text("カメラ・マイクを許可") }
+        }
+    }
+}
+
+@Composable
+private fun CameraZoomSelector(
+    isFront: Boolean,
+    zoom: CameraZoomState,
+    choices: List<CameraZoomChoice>,
+    expanded: Boolean,
+    enabled: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onSelectFacing: (Boolean) -> Unit,
+    onSelectZoom: (CameraZoomChoice) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier) {
+        Button(
+            onClick = { onExpandedChange(!expanded) },
+            enabled = enabled,
+            shape = RoundedCornerShape(20.dp),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xCC2B2927),
+                contentColor = Color.White,
+                disabledContainerColor = Color(0x662B2927),
+                disabledContentColor = Color(0x88FFFFFF)
+            )
+        ) {
+            Text(
+                "${if (isFront) "FRONT" else "BACK"}・${formatZoom(zoom.ratio)}",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { onExpandedChange(false) },
+            modifier = Modifier.widthIn(max = 360.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                SelectorRow("CAMERA") {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState()).selectableGroup()
+                    ) {
+                        SelectorChoice("FRONT", isFront, enabled) { onSelectFacing(true) }
+                        SelectorChoice("BACK", !isFront, enabled) { onSelectFacing(false) }
+                    }
+                }
+                SelectorRow("ZOOM") {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState()).selectableGroup()
+                    ) {
+                        choices.forEach { choice ->
+                            SelectorChoice(
+                                label = formatZoom(choice.ratio),
+                                selected = abs(zoom.ratio - choice.ratio) < 0.06f,
+                                enabled = enabled,
+                                onClick = { onSelectZoom(choice) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SelectorRow(label: String, content: @Composable () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            label,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.widthIn(min = 64.dp)
+        )
+        content()
+    }
+}
+
+@Composable
+private fun SelectorChoice(label: String, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    Surface(
+        color = when {
+            selected -> MaterialTheme.colorScheme.primaryContainer
+            else -> Color.Transparent
+        },
+        contentColor = when {
+            !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            selected -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.onSurface
+        },
+        shape = CircleShape,
+        modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).selectable(
+            selected = selected,
+            enabled = enabled,
+            role = Role.RadioButton,
+            onClick = onClick
+        )
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+        )
+    }
+}
+
+private fun formatZoom(ratio: Float): String {
+    val rounded = ratio.roundToInt()
+    return if (abs(ratio - rounded) < 0.05f) "${rounded}x"
+    else String.format(Locale.US, "%.1fx", ratio)
 }

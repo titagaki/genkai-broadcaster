@@ -1,64 +1,67 @@
-# Hoge Broadcaster — PeerCast向け Android RTMP配信アプリ
+# Hoge Broadcaster
 
-Kotlin + Jetpack Compose + [RootEncoder](https://github.com/pedroSG94/RootEncoder) (GenericStream)。
-スマホのカメラ映像を **RTMP push (H.264+AAC / FLV互換)** で送る、PeerCast配信用の最小構成。
+Android端末のカメラとマイクを使う、シンプルなRTMPライブ配信アプリです。
+任意のRTMPサーバーURLとストリームキーを指定して、H.264 + AACの映像・音声を送信できます。
 
-PeerCastStation・PeerCast Gateway ともに受けは RTMP なので、そのまま使えます。
-SRT は本アプリの対象外です。
+PeerCastStationとPeerCast Gatewayでの利用も想定し、入力用プリセットと接続ガイドを用意していますが、
+PeerCast専用・特化アプリではありません。
 
-## 機能 (v0.1.0)
-- 黒基調の配信画面: フレーム全体のプレビュー + 上部ステータス + 縦横に対応した操作パネル
-- 縦配信 (9:16) / 横配信 (16:9) の切替。配信方向に合わせてスマホの画面も回転
-- 前面/背面カメラの明示切替、複数背面レンズの画角選択、ライト切替、マイクミュート
-- 音量メーター、電池残量表示 (IRL Pro風)
-- RTMP配信 開始/停止 (設定画面でサーバーURL + ストリームキー指定)
-- プリセット: PeerCast Gateway (`rtmp://pcgw.pgw.jp/live`) / 自宅PeerCastStation例
-- 解像度選択: 480p / 720p / 1080p
-- ビットレートスライダー: 800〜8000 kbps (配信中も on-the-fly 変更可)
-- 前後カメラ切替、マイクミュート
-- LIVEバッジ + 経過時間 + リアルタイム送信ビットレート表示
-- 切断時の自動リトライ (5秒間隔・最大10回)
-- ForegroundService によるバックグラウンド継続 + 通知からの停止
-- 設定の端末内保存
+Kotlin、Jetpack Compose、[RootEncoder](https://github.com/pedroSG94/RootEncoder)の
+`GenericStream` APIで実装しています。
+
+## 主な機能
+
+- カメラとマイクのRTMPライブ配信
+- 全面カメラプレビュー上での配信開始・停止
+- 前面／背面カメラと利用可能な倍率の切替
+- ピンチズームとマイクミュート
+- 入力音量、電池残量、接続状態、配信時間、送信ビットレートの表示
+- 切断時の自動再接続
+- Foreground Serviceによるバックグラウンド配信と通知からの停止
+
+## 配信設定
+
+- 配信先: RTMPサーバーURL、ストリームキー
+- 配信先プリセット: PeerCast Gateway、自宅PeerCastStationの入力例
+- 映像方向: 縦 9:16、横 16:9
+- 解像度: 480p、720p、1080p
+- 映像ビットレート: 800～8000 kbps。配信中も変更可能
+- エンコード: H.264 Constrained Baseline、AAC-LC、30 fps
+
+入力した接続先、映像方向、解像度、ビットレートは端末内へ保存されます。
 
 ## 使い方
 
-### 配信方向
-配信停止中に、配信画面または設定画面の「縦 9:16」「横 16:9」を選択します。
-縦はスマホを縦に、横は横に持って使います。720pの場合、送信映像は縦720x1280 / 横1280x720です。
-選択は自動保存されます。配信中の切替はできないため、一度停止してから変更してください。
+1. 設定画面でRTMPサーバーURLとストリームキーを入力します。
+2. 映像方向、解像度、ビットレートを選びます。
+3. 受信側を接続待ち状態にします。
+4. 配信画面の開始ボタンを押します。
 
-### PeerCast Gateway (ポート開放不要)
-1. ブラウザで Gateway にログインし、ストリームタイプ **FLV** でチャンネル作成
-2. 表示された **RTMPサーバーURL** (`rtmp://pcgw.pgw.jp/live`) と **4桁キー** をアプリに入力
-   (URLは「Gateway」プリセットボタン一発)
-3. アプリで「配信を開始」→ Gateway 側が Receiving になればOK
+PeerCastStation／PeerCast Gateway固有の準備は
+[PeerCast接続ガイド](docs/integrations/peercast.md)を参照してください。
 
-### 自宅 PeerCastStation
-1. Station側で「配信」→ ソース **RTMP Source**、URLは `rtmp://localhost/live/livestream` のまま等、チャンネル名を入れて配信開始 (状態 SEARCHING)
-2. アプリ側サーバーURLに `rtmp://自宅のIPまたはホスト/live`、キーはStation側URLの末尾 (例 `livestream`) を入力
-3. アプリで「配信を開始」→ Station側が RECEIVING になればOK
+## 対応範囲
 
-## 開き方
-1. Android Studio でこのフォルダを開く
-2. Gradle sync (初回は RootEncoder 2.8.1 を JitPack から取得)
-3. 実機で実行 (エミュレータではカメラ配信不可の場合あり)
+- Android 8.0（API 26）以上
+- RTMP push（`rtmp://`）
+- 実機での利用を前提
 
-## 構成
-- `app/src/main/java/com/example/hogebroadcaster/MainActivity.kt` — Controller取得・権限・画面方向・Compose表示
-- `app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt` — プロセス共有の配信本体・プレビュー・状態管理
-- `app/src/main/java/com/example/hogebroadcaster/StreamService.kt` — foreground keep-alive
-- `app/src/main/AndroidManifest.xml` — 権限 + service定義
-- 依存: `com.github.pedroSG94.RootEncoder:library:2.8.1`, Compose BOM 2025.01.00
+SRT、RTSP、WHIP、端末内録画には対応していません。
 
-## 既知の注意
-- 一部の古いPCプレーヤー (PCRPlayerのデフォルト設定等) でスマホエンコード映像が再生できない場合があります。
-  視聴側は VLC / MPV / PeerstPlayer 推奨 (Gateway公式ヘルプより)。
+## 開発
 
-## 今後の候補
-- [ ] ビットレート自動調整
-- [ ] BBS.JPNKN のコメント表示
+1. Android Studioでリポジトリルートを開きます。
+2. Gradle Syncを実行します。
+3. Java 17を使用して実機向けにビルドします。
 
-## 注意
-- minSdk 26 / targetSdk 34 / compileSdk 36
-- Java 17 でビルドすること
+検証済みのツールバージョンと詳しい手順は
+[開発環境・ビルド](docs/engineering/development.md)を参照してください。
+
+## ドキュメント
+
+- [ドキュメント一覧](docs/README.md)
+- [製品仕様](docs/product/spec.md)
+- [現在のUI仕様](docs/ui/current.md)
+- [アーキテクチャ](docs/engineering/architecture.md)
+- [RootEncoder統合メモ](docs/engineering/rootencoder.md)
+- [PeerCast接続ガイド](docs/integrations/peercast.md)

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -30,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -43,6 +45,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -52,6 +56,7 @@ import com.example.hogebroadcaster.streamer.RESOLUTIONS
 import com.example.hogebroadcaster.streamer.StreamConfig
 import com.example.hogebroadcaster.streamer.StreamController
 import com.example.hogebroadcaster.streamer.StreamPrefs
+import com.example.hogebroadcaster.streamer.ZoomDebugOverride
 
 /** 配信先・映像・権限を分けて表示する。変更は端末へ自動保存する。 */
 @Composable
@@ -101,7 +106,7 @@ fun SettingsScreen(
                         Text("配信処理中です。ビットレート以外の映像・接続設定は、停止後に変更できます。",
                             color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
                     }
-                    SettingsSection("配信先", "PeerCastへ接続するサーバーとキー") {
+                    SettingsSection("配信先", "RTMPサーバーとストリームキー") {
                         OutlinedTextField(
                             value = rtmpServer,
                             onValueChange = { rtmpServer = it.trim(); persist() },
@@ -115,7 +120,7 @@ fun SettingsScreen(
                             value = streamKey,
                             onValueChange = { streamKey = it.trim(); persist() },
                             label = { Text("ストリームキー") },
-                            supportingText = { Text("Gatewayの4桁キー / Stationのストリーム名") },
+                            supportingText = { Text("配信先で指定されたストリームキー") },
                             visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon = {
                                 IconButton(onClick = { showKey = !showKey }) {
@@ -166,6 +171,38 @@ fun SettingsScreen(
                         )
                         Text("H.264 + AAC / ${StreamConfig.VIDEO_FPS} fps / キーフレーム ${StreamConfig.VIDEO_KEYFRAME_INTERVAL_SEC}秒",
                             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (controller.isDebuggable()) {
+                        SettingsSection("カメラ診断", "デバッグビルド専用") {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().selectableGroup(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                ZoomDebugOverride.entries.forEach { override ->
+                                    val selected = streamState.zoom.debugOverride == override
+                                    OutlinedButton(
+                                        onClick = { controller.setZoomDebugOverride(override) },
+                                        enabled = !isStreaming,
+                                        modifier = Modifier.fillMaxWidth().semantics { this.selected = selected }
+                                    ) {
+                                        RadioButton(selected = selected, onClick = null, enabled = !isStreaming)
+                                        Text(
+                                            when (override) {
+                                                ZoomDebugOverride.AUTO -> "自動判定"
+                                                ZoomDebugOverride.FORCE_DIGITAL -> "デジタルを強制"
+                                                ZoomDebugOverride.FORCE_LOGICAL -> "論理カメラを強制"
+                                            },
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    }
+                                }
+                            }
+                            Text(
+                                controller.zoomDiagnostics(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                     SettingsSection("権限と接続の準備", "配信前に受け側も準備してください") {
                         OutlinedButton(onClick = onRequestPermissions, modifier = Modifier.fillMaxWidth()) {

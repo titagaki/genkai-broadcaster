@@ -24,8 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
@@ -33,7 +31,7 @@ import androidx.compose.ui.unit.dp
  * 固有の画面にしか使わない部品は各画面ファイル内に private で置くこと。
  */
 
-/** 配信画面と設定画面で共通の出力方向選択。 */
+/** 設定画面で使用する出力方向選択。 */
 @Composable
 fun OrientationPicker(portrait: Boolean, enabled: Boolean, onSelect: (Boolean) -> Unit) {
     Row(
@@ -68,19 +66,6 @@ fun OrientationPicker(portrait: Boolean, enabled: Boolean, onSelect: (Boolean) -
                 }
             }
         }
-    }
-}
-
-/** LIVEバッジ。配信中は赤、それ以外はグレー */
-@Composable
-fun LiveBadge(isStreaming: Boolean, text: String) {
-    Box(
-        modifier = Modifier
-            .background(if (isStreaming) Color(0xFFAD302D) else MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
-            .padding(horizontal = 10.dp, vertical = 4.dp)
-    ) {
-        Text(text, color = Color.White, fontWeight = FontWeight.Bold,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

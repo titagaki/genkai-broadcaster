@@ -2,11 +2,11 @@
 
 - 作成日: 2026-09-07
 - 対象: 縦横配信・UI見直し後の作業ツリー (未コミット変更を含む)
-- 状態: 提案のみ。以下のリファクタリングは未実施。
+- 状態: 2026-09-07時点のレビュー記録。現在の実装状況は各項目へ着手する前に再確認する。
 - 確認方法: コードの静的調査。ビルド・実機検証は未実施。
 
 大きなクラス分割より、状態の二重管理と準備・停止処理の重複を減らすことを優先する。
-振る舞いの正本は [spec.md](spec.md)。不具合修正や仕様変更は、構造だけの整理と分けて扱う。
+振る舞いの正本は [製品仕様](../product/spec.md)。不具合修正や仕様変更は、構造だけの整理と分けて扱う。
 
 ## 優先順位
 
@@ -20,10 +20,10 @@
 
 ## 1. カメラ表示状態をControllerへ一本化
 
-対象: [StreamScreen.kt](../app/src/main/java/com/example/hogebroadcaster/ui/StreamScreen.kt) の
-`isFront` / `lensId` / `torchOn` とカメラ操作コールバック、
-[StreamController.kt](../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt) の
-`selectCamera()` / `openLens()` / `setTorch()`。
+対象: [StreamScreen.kt](../../app/src/main/java/com/example/hogebroadcaster/ui/StreamScreen.kt) の
+`isFront` / `lensId` / ズーム倍率とカメラ操作コールバック、
+[StreamController.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt) の
+`selectCamera()` / `openLens()` / `setZoomRatio()`。
 
 ### 現状
 
@@ -38,11 +38,11 @@
 - 復元用の「選択していた値」と、実機の「現在値」は区別する。保存値をそのまま実状態として表示しない。
 - 専用の `CameraController` は新設せず、まず現在のController内で整理する。
 
-確認: 前後・レンズ切替、ライトON/OFF、切替失敗、設定往復、Activity再生成後の表示と実状態の一致。
+確認: 前後・レンズ切替、切替失敗、設定往復、Activity再生成後の表示と実状態の一致。
 
 ## 2. プレビュー処理を一方向にする
 
-対象: [StreamController.kt](../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt) の
+対象: [StreamController.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt) の
 `attachSurface()` / `detachSurface()` / `startPreviewIfReady()` / `prepareFromPrefs()`。
 
 ### 現状
@@ -64,10 +64,10 @@ RootEncoderの非同期停止については [rootencoder.md](rootencoder.md) �
 
 ## 3. 準備設定の型化と単位変換の集約
 
-対象: [StreamController.kt](../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt) の
+対象: [StreamController.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt) の
 `prepareFromPrefs()` / `setVideoBitrateOnFly()`、
-[StreamConfig.kt](../app/src/main/java/com/example/hogebroadcaster/streamer/StreamConfig.kt) の `preparedKey()`、
-[SettingsScreen.kt](../app/src/main/java/com/example/hogebroadcaster/ui/SettingsScreen.kt) のビットレート変更。
+[StreamConfig.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamConfig.kt) の `preparedKey()`、
+[SettingsScreen.kt](../../app/src/main/java/com/example/hogebroadcaster/ui/SettingsScreen.kt) のビットレート変更。
 
 ### 現状
 
@@ -85,9 +85,9 @@ RootEncoderの非同期停止については [rootencoder.md](rootencoder.md) �
 
 ## 4. URL検証ルールの共通化
 
-対象: [StreamScreen.kt](../app/src/main/java/com/example/hogebroadcaster/ui/StreamScreen.kt) の開始操作、
-[StreamController.kt](../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt) の `startStream()`、
-[StreamPrefs.kt](../app/src/main/java/com/example/hogebroadcaster/streamer/StreamPrefs.kt) の `buildFullUrl()` 付近。
+対象: [StreamScreen.kt](../../app/src/main/java/com/example/hogebroadcaster/ui/StreamScreen.kt) の開始操作、
+[StreamController.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt) の `startStream()`、
+[StreamPrefs.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamPrefs.kt) の `buildFullUrl()` 付近。
 
 ### 現状と進め方
 
@@ -100,7 +100,7 @@ RootEncoderの非同期停止については [rootencoder.md](rootencoder.md) �
 
 ## 5. 高頻度の表示更新を局所化
 
-対象: [StreamScreen.kt](../app/src/main/java/com/example/hogebroadcaster/ui/StreamScreen.kt) の
+対象: [StreamScreen.kt](../../app/src/main/java/com/example/hogebroadcaster/ui/StreamScreen.kt) の
 音量・経過時間・電池情報の状態と `LaunchedEffect`。
 
 ### 現状と進め方
@@ -114,7 +114,7 @@ RootEncoderの非同期停止については [rootencoder.md](rootencoder.md) �
 
 ## 別件の不具合修正候補
 
-[CameraLenses.kt](../app/src/main/java/com/example/hogebroadcaster/streamer/CameraLenses.kt) の
+[CameraLenses.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/CameraLenses.kt) の
 `distinctBy { it.label }` は、前面・背面の丸め後の画角ラベルが同じ場合に一方を一覧から落とす可能性がある。
 
 - 重複判定に少なくとも `isFront` を含める修正を検討する。

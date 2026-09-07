@@ -1,7 +1,7 @@
-# PeerCast 調査メモ
+# PeerCast接続ガイド
 
-本アプリは PeerCastStation / PeerCast Gateway ともに **RTMP push 受け**のため、
-RTMP さえ送れれば使える。SRT は対象外。
+PeerCastStationとPeerCast Gatewayは、本アプリが対応するRTMP配信先の一例です。
+本アプリはPeerCast専用ではありませんが、どちらもRTMP pushを受け付けるため接続できます。
 
 ## PeerCastStation での受け方
 
@@ -37,10 +37,4 @@ RTMP さえ送れれば使える。SRT は対象外。
 ハードウェアデコード経路が処理しきれない。VLC/MPV は FFmpeg ソフトウェアデコードで寛容。
 
 本アプリの対策: Constrained Baseline + AAC-LC + GOP 2秒 + 適正 Level
-(詳細は `docs/rootencoder.md`)。ただし実害の報告は未確認であり、README の注意書きは予防的転載。
-
-## コメント表示 (将来)
-
-- したらばではなく **BBS.JPNKN** (`https://bbs.jpnkn.com/`) 向けに検討する。
-  PeerCast 向け実況掲示板 (2ch 互換 `read.cgi` 形式)。
-- 未着手。やる場合は JPNKN のスレ取得方式の調査から始めること。
+(詳細は[RootEncoder統合メモ](../engineering/rootencoder.md))。ただし実害の報告は未確認。
