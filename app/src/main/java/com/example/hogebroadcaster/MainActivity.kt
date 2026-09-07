@@ -2,6 +2,7 @@ package com.example.hogebroadcaster
 
 import android.Manifest
 import android.content.SharedPreferences
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -9,7 +10,6 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.MaterialTheme
 import androidx.core.content.ContextCompat
 import com.example.hogebroadcaster.streamer.StreamConfig
 import com.example.hogebroadcaster.streamer.StreamController
@@ -17,7 +17,7 @@ import com.example.hogebroadcaster.ui.AppRoot
 
 /**
  * アプリの入口。責務は3つのみ:
- * 1. [StreamController] の生成・破棄
+ * 1. プロセス共有の [StreamController] の取得
  * 2. 権限要求 (registerForActivityResult は Activity に必須のためここに置く)
  * 3. Compose ルート ([AppRoot]) の表示
  *
@@ -30,34 +30,33 @@ class MainActivity : ComponentActivity() {
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { grants ->
-        val denied = grants.filterValues { !it }.keys
-        if (denied.isNotEmpty()) {
-            Toast.makeText(this, "カメラ/マイク権限が必要です: $denied", Toast.LENGTH_SHORT).show()
-        } else {
+    ) {
+        if (controller.hasPermissions()) {
             controller.startPreviewIfReady()
+        } else {
+            Toast.makeText(this, "カメラ/マイク権限が必要です", Toast.LENGTH_SHORT).show()
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences(StreamConfig.PREFS_FILE, MODE_PRIVATE)
-        controller = StreamController(this)
+        controller = StreamController.getInstance(this)
         setContent {
-            MaterialTheme {
-                AppRoot(
-                    controller = controller,
-                    prefs = prefs,
-                    onRequestPermissions = ::requestPermissionsIfNeeded
-                )
-            }
+            AppRoot(
+                controller = controller,
+                prefs = prefs,
+                onRequestPermissions = ::requestPermissionsIfNeeded,
+                onOrientationChanged = { portrait ->
+                    requestedOrientation = if (portrait) {
+                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                    } else {
+                        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    }
+                }
+            )
         }
         requestPermissionsIfNeeded()
-    }
-
-    override fun onDestroy() {
-        if (::controller.isInitialized) controller.release()
-        super.onDestroy()
     }
 
     /** カメラ/マイク (+通知) 権限を要求する。設定画面の「権限を再確認」からも呼ばれる */

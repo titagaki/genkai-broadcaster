@@ -7,7 +7,8 @@ PeerCastStation・PeerCast Gateway ともに受けは RTMP なので、そのま
 SRT は本アプリの対象外です。
 
 ## 機能 (v0.1.0)
-- Moblin風の配信画面: 全画面プレビュー + 上部ステータス + 下部クイックボタン
+- 黒基調の配信画面: フレーム全体のプレビュー + 上部ステータス + 縦横に対応した操作パネル
+- 縦配信 (9:16) / 横配信 (16:9) の切替。配信方向に合わせてスマホの画面も回転
 - 前面/背面カメラの明示切替、複数背面レンズの画角選択、ライト切替、マイクミュート
 - 音量メーター、電池残量表示 (IRL Pro風)
 - RTMP配信 開始/停止 (設定画面でサーバーURL + ストリームキー指定)
@@ -21,6 +22,11 @@ SRT は本アプリの対象外です。
 - 設定の端末内保存
 
 ## 使い方
+
+### 配信方向
+配信停止中に、配信画面または設定画面の「縦 9:16」「横 16:9」を選択します。
+縦はスマホを縦に、横は横に持って使います。720pの場合、送信映像は縦720x1280 / 横1280x720です。
+選択は自動保存されます。配信中の切替はできないため、一度停止してから変更してください。
 
 ### PeerCast Gateway (ポート開放不要)
 1. ブラウザで Gateway にログインし、ストリームタイプ **FLV** でチャンネル作成
@@ -39,7 +45,8 @@ SRT は本アプリの対象外です。
 3. 実機で実行 (エミュレータではカメラ配信不可の場合あり)
 
 ## 構成
-- `app/src/main/java/com/example/hogebroadcaster/MainActivity.kt` — GenericStream保持 + Compose UI
+- `app/src/main/java/com/example/hogebroadcaster/MainActivity.kt` — Controller取得・権限・画面方向・Compose表示
+- `app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt` — プロセス共有の配信本体・プレビュー・状態管理
 - `app/src/main/java/com/example/hogebroadcaster/StreamService.kt` — foreground keep-alive
 - `app/src/main/AndroidManifest.xml` — 権限 + service定義
 - 依存: `com.github.pedroSG94.RootEncoder:library:2.8.1`, Compose BOM 2025.01.00

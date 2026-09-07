@@ -1,27 +1,40 @@
 package com.example.hogebroadcaster.ui
 
 import android.content.SharedPreferences
+import android.os.SystemClock
 import android.view.SurfaceView
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FlashlightOff
 import androidx.compose.material.icons.filled.FlashlightOn
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,12 +43,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -45,320 +59,358 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.hogebroadcaster.streamer.LensOption
 import com.example.hogebroadcaster.streamer.RESOLUTIONS
+import com.example.hogebroadcaster.streamer.StreamConfig
 import com.example.hogebroadcaster.streamer.StreamController
 import com.example.hogebroadcaster.streamer.StreamPrefs
-import com.example.hogebroadcaster.system.BatteryInfo
 import com.example.hogebroadcaster.system.BatteryMonitor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlin.math.max
 
-/**
- * Moblin風の配信画面。
- * 全画面プレビュー + 上部ステータスバー + 下部クイックボタン。
- * 設定値は保持せず、配信開始時のみ prefs から読む (設定の真実は [StreamPrefs])。
- */
+/** 送信フレーム全体を見せるビューと、縦横で配置を変える操作パネル。 */
 @Composable
 fun StreamScreen(
     controller: StreamController,
     prefs: SharedPreferences,
-    onOpenSettings: () -> Unit
+    portrait: Boolean,
+    onPortraitChanged: (Boolean) -> Unit,
+    onOpenSettings: () -> Unit,
+    onRequestPermissions: () -> Unit
 ) {
-    var isStreaming by remember { mutableStateOf(controller.isStreamingNow()) }
-    var status by remember { mutableStateOf("待機中") }
-    var stats by remember { mutableStateOf("") }
-    var muted by remember { mutableStateOf(false) }
+    val streamState by controller.state.collectAsState()
+    var urlError by remember { mutableStateOf<String?>(null) }
+    val status = urlError ?: streamState.status
+    val resolution = remember(prefs) { RESOLUTIONS[StreamPrefs.loadResIndex(prefs)] }
+    val dimensions = resolution.dimensions(portrait)
+    val aspectRatio = resolution.outputWidth(portrait).toFloat() / resolution.outputHeight(portrait)
     var torchOn by remember { mutableStateOf(controller.isTorchOn()) }
     var isFront by remember { mutableStateOf(controller.isFrontCamera()) }
-    var streamSeconds by remember { mutableLongStateOf(0L) }
-
-    // 複数レンズ (カメラメニューで選択)
-    var lenses by remember { mutableStateOf(controller.listLenses()) }
-    var lensId by remember { mutableStateOf<String?>(controller.currentLensId()) }
-    val backLenses = lenses.filter { !it.isFront }
-    val frontLens = lenses.firstOrNull { it.isFront }
-
-    // カメラメニューの表示状態 (2段階切替の2段目)
+    var lensId by remember { mutableStateOf(controller.currentLensId()) }
     var showCameraMenu by remember { mutableStateOf(false) }
-
-    // 音量メーター (100msポーリング + 減衰で滑らかに)
+    val lenses = remember(streamState.previewReady) { controller.listLenses() }
     var meterLevel by remember { mutableFloatStateOf(0f) }
-
-    // 電池残量 (30秒ポーリングで十分)
-    val appContext = LocalContext.current.applicationContext
-    var batteryText by remember { mutableStateOf(formatBattery(BatteryMonitor.getInfo(appContext))) }
-
-    DisposableEffect(controller) {
-        controller.onStatus = { status = it }
-        controller.onStreamingChanged = { isStreaming = it }
-        controller.onStats = { stats = it }
-        onDispose {
-            controller.onStatus = null
-            controller.onStreamingChanged = null
-            controller.onStats = null
-        }
+    val startedAtMs = streamState.startedAtMs
+    var streamSeconds by remember(startedAtMs) {
+        mutableLongStateOf(startedAtMs?.let { (SystemClock.elapsedRealtime() - it) / 1000 } ?: 0L)
     }
+    val appContext = LocalContext.current.applicationContext
+    var battery by remember { mutableStateOf(BatteryMonitor.getInfo(appContext)) }
 
-    LaunchedEffect(isStreaming) {
-        if (isStreaming) {
-            val start = System.currentTimeMillis()
+    LaunchedEffect(startedAtMs) {
+        if (startedAtMs != null) {
             while (isActive) {
-                streamSeconds = (System.currentTimeMillis() - start) / 1000
+                streamSeconds = (SystemClock.elapsedRealtime() - startedAtMs) / 1000
                 delay(1000)
             }
-        } else {
-            streamSeconds = 0
         }
     }
-
-    // 音量メーター更新。ミュート時は 0 固定
-    LaunchedEffect(Unit) {
+    LaunchedEffect(controller, streamState.muted) {
         while (isActive) {
-            val raw = if (muted) 0f else controller.micLevel()
-            meterLevel = max(raw, meterLevel * 0.75f)
+            meterLevel = if (streamState.muted) 0f else max(controller.micLevel(), meterLevel * 0.75f)
             if (meterLevel < 0.01f) meterLevel = 0f
             delay(100)
         }
     }
-
-    // 電池残量更新
-    LaunchedEffect(Unit) {
+    LaunchedEffect(streamState.previewReady) {
+        isFront = controller.isFrontCamera()
+        lensId = controller.currentLensId()
+        torchOn = controller.isTorchOn()
+    }
+    LaunchedEffect(appContext) {
         while (isActive) {
-            batteryText = formatBattery(BatteryMonitor.getInfo(appContext))
+            battery = BatteryMonitor.getInfo(appContext)
             delay(30_000)
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
-        AndroidView(
-            factory = { ctx ->
-                SurfaceView(ctx).also { controller.attachSurface(it) }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
-
-        TopStatusBar(
-            isStreaming = isStreaming,
-            status = status,
-            stats = stats,
-            batteryText = batteryText,
-            streamSeconds = streamSeconds,
-            onOpenSettings = onOpenSettings,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
-
-        // 左端の音量メーター (IRL Pro風)
-        AudioMeter(
-            level = meterLevel,
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 12.dp)
-        )
-
-        BottomControlBar(
-            isStreaming = isStreaming,
-            status = status,
+    val controls: @Composable (Boolean, Modifier) -> Unit = { compact, modifier ->
+        ControlPanel(
+            isStreaming = streamState.isStreaming,
+            portrait = portrait,
+            onPortraitChanged = onPortraitChanged,
             isFront = isFront,
             torchOn = torchOn,
-            muted = muted,
+            muted = streamState.muted,
+            cameraReady = streamState.previewReady,
+            status = status,
+            compact = compact,
             onOpenCameraMenu = { showCameraMenu = true },
             onToggleTorch = {
                 controller.setTorch(!torchOn)
                 torchOn = controller.isTorchOn()
             },
-            onToggleMute = {
-                muted = !muted
-                controller.toggleMute(muted)
+            onToggleMute = { controller.toggleMute(!streamState.muted) },
+            onToggleStream = {
+                urlError = null
+                if (controller.isStreamingNow()) {
+                    controller.stopStream()
+                } else {
+                    val url = StreamPrefs.buildFullUrl(prefs)
+                    if (url.startsWith("rtmp://")) controller.startStream(url)
+                    else urlError = "配信先URLが不正です。右上の設定を確認してください"
+                }
             },
-            onToggleStream = { toggleStream(controller, prefs) { status = it } },
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = modifier
         )
+    }
 
-        // カメラ切替メニュー (2段階切替の2段目)
-        if (showCameraMenu) {
-            CameraMenuSheet(
-                isFront = isFront,
-                lensId = lensId,
-                frontLens = frontLens,
-                backLenses = backLenses,
-                onSelectFront = {
-                    controller.selectCamera(true)
-                    isFront = true
-                    showCameraMenu = false
-                },
-                onSelectBack = {
-                    controller.selectCamera(false)
+    Column(
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).safeDrawingPadding()
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LiveBadge(
+                    isStreaming = streamState.isConnected,
+                    text = if (streamState.isConnected) {
+                        "LIVE  ${"%02d:%02d".format(streamSeconds / 60, streamSeconds % 60)}"
+                    } else status
+                )
+                Text(
+                    "$dimensions / ${StreamConfig.VIDEO_FPS} fps" +
+                        if (streamState.stats.isNotEmpty()) " / ${streamState.stats}" else " / RTMP",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (battery.percent >= 0) {
+                Text(
+                    "${battery.percent}%" + if (battery.isCharging) " 充電中" else "",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 88.dp)
+                )
+            }
+            IconButton(onClick = onOpenSettings, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Filled.Settings, contentDescription = "配信設定", tint = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+            if (maxWidth > maxHeight) {
+                Row(Modifier.fillMaxSize()) {
+                    StreamPreview(
+                        controller, aspectRatio, portrait, streamState.previewReady,
+                        meterLevel, onRequestPermissions, Modifier.weight(1f).fillMaxHeight()
+                    )
+                    controls(true, Modifier.width((this@BoxWithConstraints.maxWidth * 0.34f).coerceIn(180.dp, 264.dp)).fillMaxHeight())
+                }
+            } else {
+                Column(Modifier.fillMaxSize()) {
+                    StreamPreview(
+                        controller, aspectRatio, portrait, streamState.previewReady,
+                        meterLevel, onRequestPermissions, Modifier.weight(1f).fillMaxWidth()
+                    )
+                    controls(false, Modifier.fillMaxWidth().heightIn(max = this@BoxWithConstraints.maxHeight * 0.48f))
+                }
+            }
+        }
+    }
+
+    if (showCameraMenu) {
+        CameraMenuSheet(
+            isFront = isFront,
+            lensId = lensId,
+            frontLens = lenses.firstOrNull { it.isFront },
+            backLenses = lenses.filter { !it.isFront },
+            onSelectFront = {
+                controller.selectCamera(true)
+                isFront = controller.isFrontCamera()
+                lensId = controller.currentLensId()
+                torchOn = controller.isTorchOn()
+                showCameraMenu = false
+            },
+            onSelectBack = {
+                controller.selectCamera(false)
+                isFront = controller.isFrontCamera()
+                lensId = controller.currentLensId()
+                torchOn = controller.isTorchOn()
+                showCameraMenu = false
+            },
+            onSelectLens = { id ->
+                if (controller.openLens(id)) {
+                    lensId = id
                     isFront = controller.isFrontCamera()
-                    lensId = controller.currentLensId()
-                    showCameraMenu = false
-                },
-                onSelectLens = { id ->
-                    if (controller.openLens(id)) {
-                        lensId = id
-                        isFront = false
-                    }
-                    showCameraMenu = false
-                },
-                onDismiss = { showCameraMenu = false }
+                    torchOn = controller.isTorchOn()
+                }
+                showCameraMenu = false
+            },
+            onDismiss = { showCameraMenu = false }
+        )
+    }
+}
+
+@Composable
+private fun StreamPreview(
+    controller: StreamController,
+    aspectRatio: Float,
+    portrait: Boolean,
+    ready: Boolean,
+    meterLevel: Float,
+    onRequestPermissions: () -> Unit,
+    modifier: Modifier
+) {
+    BoxWithConstraints(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
+        val frameWidth = minOf(maxWidth, maxHeight * aspectRatio)
+        val frameHeight = frameWidth / aspectRatio
+        Box(Modifier.size(frameWidth, frameHeight).border(1.dp, Color(0xFF424C46))) {
+            AndroidView(
+                factory = { ctx -> SurfaceView(ctx).also { controller.attachSurface(it) } },
+                onRelease = { controller.detachSurface(it) },
+                modifier = Modifier.fillMaxSize()
+            )
+            Text(
+                if (portrait) "縦配信 / 9:16" else "横配信 / 16:9",
+                modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
+                    .background(Color(0xAA101413), RoundedCornerShape(4.dp)).padding(6.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            AudioMeter(
+                level = meterLevel,
+                modifier = Modifier.align(Alignment.BottomStart).padding(12.dp)
             )
         }
-    }
-}
-
-/** prefs の設定で配信 開始/停止する。URL不正時は [onInvalidUrl] に理由を返す */
-private fun toggleStream(
-    controller: StreamController,
-    prefs: SharedPreferences,
-    onInvalidUrl: (String) -> Unit
-) {
-    if (controller.isStreamingNow()) {
-        controller.stopStream()
-        return
-    }
-    val resIndex = StreamPrefs.loadResIndex(prefs)
-    val bitrateKbps = StreamPrefs.loadBitrateKbps(prefs)
-    val res = RESOLUTIONS[resIndex]
-    val url = StreamPrefs.buildFullUrl(prefs)
-    if (!url.startsWith("rtmp://")) {
-        onInvalidUrl("URLが不正です (右上の設定を確認)")
-        return
-    }
-    if (controller.ensurePrepared(res.width, res.height, bitrateKbps * 1000)) {
-        controller.startStream(url)
-    }
-}
-
-/** 上部ステータスバー: LIVEバッジ + 統計 + 電池残量 + 設定ボタン */
-@Composable
-private fun TopStatusBar(
-    isStreaming: Boolean,
-    status: String,
-    stats: String,
-    batteryText: String,
-    streamSeconds: Long,
-    onOpenSettings: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(Color(0x88000000))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        LiveBadge(
-            isStreaming = isStreaming,
-            text = if (isStreaming) {
-                "● LIVE ${"%02d:%02d".format(streamSeconds / 60, streamSeconds % 60)}"
-            } else {
-                "○ $status"
+        if (!ready) {
+            Column(
+                Modifier.padding(16.dp).background(Color(0xE6101413), RoundedCornerShape(12.dp))
+                    .padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("プレビュー準備中", color = Color.White, style = MaterialTheme.typography.titleSmall)
+                if (!controller.hasPermissions()) {
+                    OutlinedButton(onClick = onRequestPermissions) { Text("カメラ・マイクを許可") }
+                }
             }
-        )
-        if (stats.isNotEmpty()) {
-            Spacer(Modifier.width(8.dp))
-            StatsChip(stats)
-        }
-        Spacer(Modifier.weight(1f))
-        if (batteryText.isNotEmpty()) {
-            Text(batteryText, color = Color.White)
-            Spacer(Modifier.width(8.dp))
-        }
-        IconButton(onClick = onOpenSettings) {
-            Icon(Icons.Filled.Settings, contentDescription = "設定", tint = Color.White)
         }
     }
 }
 
-/** 電池表示文言。充電中は⚡、通常は🔋 */
-private fun formatBattery(info: BatteryInfo): String {
-    if (info.percent < 0) return ""
-    val icon = if (info.isCharging) "⚡" else "🔋"
-    return "$icon${info.percent}%"
-}
-
-/** 下部コントロールバー: カメラメニュー・ライト・マイク・開始/停止 */
 @Composable
-private fun BottomControlBar(
+private fun ControlPanel(
     isStreaming: Boolean,
-    status: String,
+    portrait: Boolean,
+    onPortraitChanged: (Boolean) -> Unit,
     isFront: Boolean,
     torchOn: Boolean,
     muted: Boolean,
+    cameraReady: Boolean,
+    status: String,
+    compact: Boolean,
     onOpenCameraMenu: () -> Unit,
     onToggleTorch: () -> Unit,
     onToggleMute: () -> Unit,
     onToggleStream: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(Color(0xAA000000))
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
+    val tools: @Composable (Modifier) -> Unit = { itemModifier ->
+        QuickControl(Icons.Filled.PhotoCamera, if (isFront) "前面カメラ" else "背面・レンズ",
+            false, cameraReady, compact, onOpenCameraMenu, itemModifier)
+        QuickControl(if (torchOn) Icons.Filled.FlashlightOn else Icons.Filled.FlashlightOff,
+            if (torchOn) "ライトON" else "ライトOFF", torchOn, cameraReady && !isFront,
+            compact, onToggleTorch, itemModifier)
+        QuickControl(if (muted) Icons.Filled.MicOff else Icons.Filled.Mic,
+            if (muted) "ミュート中" else "マイクON", muted, cameraReady || isStreaming,
+            compact, onToggleMute, itemModifier, warning = muted)
+    }
+    Column(modifier.background(MaterialTheme.colorScheme.surface).padding(12.dp)) {
+        Column(
+            Modifier.weight(1f, fill = compact).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // パネルタップでは切替えず、メニューを開く (2段階切替の1段目)
-            Row {
-                CameraSegButton(label = "BACK", selected = !isFront) { onOpenCameraMenu() }
-                CameraSegButton(label = "FRONT", selected = isFront) { onOpenCameraMenu() }
+            Text("配信方向", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OrientationPicker(portrait, !isStreaming, onPortraitChanged)
+            if (isStreaming) {
+                Text("方向の変更は配信停止後にできます", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            IconButton(onClick = onToggleTorch) {
-                Icon(
-                    if (torchOn) Icons.Filled.FlashlightOn else Icons.Filled.FlashlightOff,
-                    contentDescription = "ライト",
-                    tint = if (torchOn) Color.Yellow else Color.White
-                )
-            }
-            IconButton(onClick = onToggleMute) {
-                Icon(
-                    if (muted) Icons.Filled.MicOff else Icons.Filled.Mic,
-                    contentDescription = "ミュート",
-                    tint = if (muted) Color.Red else Color.White
-                )
+            if (compact) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { tools(Modifier.fillMaxWidth()) }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { tools(Modifier.weight(1f)) }
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
         Button(
             onClick = onToggleStream,
-            shape = CircleShape,
+            enabled = isStreaming || cameraReady,
+            shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (isStreaming) Color(0xFFB3261E) else Color(0xFF2E7D32)
+                containerColor = if (isStreaming) Color(0xFFB43832) else MaterialTheme.colorScheme.primary,
+                contentColor = if (isStreaming) Color.White else MaterialTheme.colorScheme.onPrimary
             ),
-            modifier = Modifier.size(84.dp)
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
         ) {
-            Text(
-                if (isStreaming) "停止" else "開始",
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+            Icon(if (isStreaming) Icons.Filled.Stop else Icons.Filled.PlayArrow, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text(if (isStreaming) "配信を停止" else "配信を開始", fontWeight = FontWeight.Bold)
         }
-        if (!isStreaming && status != "待機中") {
-            Spacer(Modifier.height(8.dp))
-            Text(status, color = Color.LightGray, style = MaterialTheme.typography.bodySmall)
+        if (status != "LIVE" && status != "待機中" && status != "切断") {
+            Text(status, modifier = Modifier.padding(top = 8.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
-/**
- * カメラ切替メニュー (2段階切替の2段目)。下から出るシートで選択する。
- * FRONT + 背面レンズ一覧 (画角表示) を出し、現在の選択をハイライトする。
- * レンズ列挙に失敗した場合は BACK/FRONT の2択になる。
- */
+@Composable
+private fun QuickControl(
+    icon: ImageVector,
+    label: String,
+    active: Boolean,
+    enabled: Boolean,
+    compact: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier,
+    warning: Boolean = false
+) {
+    Button(
+        onClick = onClick, enabled = enabled,
+        modifier = modifier.heightIn(min = 48.dp),
+        shape = RoundedCornerShape(10.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = when {
+                warning -> MaterialTheme.colorScheme.errorContainer
+                active -> MaterialTheme.colorScheme.primaryContainer
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            },
+            contentColor = when {
+                warning -> MaterialTheme.colorScheme.onErrorContainer
+                active -> MaterialTheme.colorScheme.onPrimaryContainer
+                else -> MaterialTheme.colorScheme.onSurface
+            }
+        )
+    ) {
+        if (compact) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+        } else {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+                Text(label, style = MaterialTheme.typography.labelMedium)
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CameraMenuSheet(
@@ -368,52 +420,33 @@ private fun CameraMenuSheet(
     backLenses: List<LensOption>,
     onSelectFront: () -> Unit,
     onSelectBack: () -> Unit,
-    onSelectLens: (cameraId: String) -> Unit,
+    onSelectLens: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState()
-    ) {
-        Text(
-            "カメラ選択",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
-        CameraMenuItem(
-            label = if (frontLens != null) "FRONT ${frontLens.label}" else "FRONT",
-            selected = isFront,
-            onClick = onSelectFront
-        )
-        if (backLenses.isEmpty()) {
-            CameraMenuItem(
-                label = "BACK",
-                selected = !isFront,
-                onClick = onSelectBack
-            )
-        } else {
-            backLenses.forEach { lens ->
-                CameraMenuItem(
-                    label = "BACK ${lens.label}",
-                    selected = !isFront && lens.cameraId == lensId,
-                    onClick = { onSelectLens(lens.cameraId) }
-                )
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            Text("カメラとレンズ", style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp))
+            CameraMenuItem(if (frontLens != null) "前面 ${frontLens.label}" else "前面カメラ", isFront, onSelectFront)
+            if (backLenses.isEmpty()) {
+                CameraMenuItem("背面カメラ", !isFront, onSelectBack)
+            } else {
+                backLenses.forEach { lens ->
+                    CameraMenuItem("背面 ${lens.label}", !isFront && lens.cameraId == lensId) {
+                        onSelectLens(lens.cameraId)
+                    }
+                }
             }
+            Spacer(Modifier.height(24.dp))
         }
-        Spacer(Modifier.height(24.dp))
     }
 }
 
 @Composable
 private fun CameraMenuItem(label: String, selected: Boolean, onClick: () -> Unit) {
     ListItem(
-        headlineContent = {
-            Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
-        },
-        trailingContent = {
-            RadioButton(selected = selected, onClick = onClick)
-        },
+        headlineContent = { Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal) },
+        trailingContent = { RadioButton(selected = selected, onClick = onClick) },
         modifier = Modifier.clickable(onClick = onClick)
     )
 }

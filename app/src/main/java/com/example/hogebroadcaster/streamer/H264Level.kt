@@ -19,10 +19,10 @@ object H264Level {
     private data class Level(val maxMacroblocksPerSecond: Long, val avcLevel: Int)
 
     private val LEVELS = listOf(
-        Level(40_500, MediaCodecInfo.CodecProfileLevel.AVCLevel30),
+        Level(40_500, MediaCodecInfo.CodecProfileLevel.AVCLevel3),
         Level(108_000, MediaCodecInfo.CodecProfileLevel.AVCLevel31),
         Level(216_000, MediaCodecInfo.CodecProfileLevel.AVCLevel32),
-        Level(245_760, MediaCodecInfo.CodecProfileLevel.AVCLevel40),
+        Level(245_760, MediaCodecInfo.CodecProfileLevel.AVCLevel4),
         Level(522_240, MediaCodecInfo.CodecProfileLevel.AVCLevel42),
     )
 

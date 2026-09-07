@@ -10,11 +10,10 @@ import android.media.MediaCodecInfo
  */
 object StreamConfig {
     // ---- Video ----
-    const val VIDEO_ROTATION = 0
+    const val LANDSCAPE_ROTATION = 0
+    const val PORTRAIT_ROTATION = 90
+    const val DEFAULT_PORTRAIT = false // 既存の横長出力を維持
     const val VIDEO_FPS = 30
-    const val DEFAULT_WIDTH = 1280
-    const val DEFAULT_HEIGHT = 720
-    const val DEFAULT_VIDEO_BITRATE = 3_000_000 // bps
 
     /**
      * H.264 Constrained Baseline。
@@ -49,17 +48,18 @@ object StreamConfig {
     const val DEFAULT_SERVER = "rtmp://pcgw.pgw.jp/live"
 
     /** prepare済み設定の識別キー。設定変更検出に使う */
-    fun preparedKey(width: Int, height: Int, videoBitrate: Int): String =
-        "$width-$height-$videoBitrate"
-
-    fun defaultPreparedKey(): String =
-        preparedKey(DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_VIDEO_BITRATE)
+    fun preparedKey(width: Int, height: Int, videoBitrate: Int, rotation: Int): String =
+        "$width-$height-$videoBitrate-$rotation"
 }
 
-data class Resolution(val label: String, val width: Int, val height: Int)
+data class Resolution(val label: String, val width: Int, val height: Int) {
+    fun outputWidth(portrait: Boolean): Int = if (portrait) height else width
+    fun outputHeight(portrait: Boolean): Int = if (portrait) width else height
+    fun dimensions(portrait: Boolean): String = "${outputWidth(portrait)} x ${outputHeight(portrait)}"
+}
 
 val RESOLUTIONS = listOf(
-    Resolution("480p (854x480)", 854, 480),
-    Resolution("720p (1280x720)", 1280, 720),
-    Resolution("1080p (1920x1080)", 1920, 1080),
+    Resolution("480p", 854, 480),
+    Resolution("720p", 1280, 720),
+    Resolution("1080p", 1920, 1080),
 )

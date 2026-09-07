@@ -1,20 +1,31 @@
 package com.example.hogebroadcaster.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.StayCurrentLandscape
+import androidx.compose.material.icons.filled.StayCurrentPortrait
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
@@ -22,18 +33,41 @@ import androidx.compose.ui.unit.dp
  * 固有の画面にしか使わない部品は各画面ファイル内に private で置くこと。
  */
 
-/** カメラ前後セグメントの1ボタン。選択中は白抜きハイライト */
+/** 配信画面と設定画面で共通の出力方向選択。 */
 @Composable
-fun CameraSegButton(label: String, selected: Boolean, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) Color.White else Color.Transparent,
-            contentColor = if (selected) Color.Black else Color.White
-        ),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+fun OrientationPicker(portrait: Boolean, enabled: Boolean, onSelect: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+        listOf(true, false).forEach { vertical ->
+            val selected = portrait == vertical
+            Surface(
+                color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
+                modifier = Modifier.weight(1f).selectable(
+                    selected = selected,
+                    enabled = enabled,
+                    role = Role.RadioButton,
+                    onClick = { onSelect(vertical) }
+                )
+            ) {
+                Row(
+                    modifier = Modifier.heightIn(min = 52.dp).padding(horizontal = 8.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        if (vertical) Icons.Filled.StayCurrentPortrait else Icons.Filled.StayCurrentLandscape,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(if (vertical) "縦 9:16" else "横 16:9", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
     }
 }
 
@@ -42,22 +76,11 @@ fun CameraSegButton(label: String, selected: Boolean, onClick: () -> Unit) {
 fun LiveBadge(isStreaming: Boolean, text: String) {
     Box(
         modifier = Modifier
-            .background(if (isStreaming) Color.Red else Color.DarkGray)
+            .background(if (isStreaming) Color(0xFFAD302D) else MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
             .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
-        Text(text, color = Color.White, fontWeight = FontWeight.Bold)
-    }
-}
-
-/** 送信統計チップ ("3.0 Mbps [good]" 等) */
-@Composable
-fun StatsChip(stats: String) {
-    Box(
-        modifier = Modifier
-            .background(Color(0xAA000000))
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-    ) {
-        Text(stats, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+        Text(text, color = Color.White, fontWeight = FontWeight.Bold,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

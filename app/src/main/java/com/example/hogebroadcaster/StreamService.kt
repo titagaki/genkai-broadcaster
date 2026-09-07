@@ -10,13 +10,16 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.example.hogebroadcaster.streamer.StreamController
 
 /**
  * Foreground keep-alive service for IRL streaming.
- * The encoder itself lives in MainActivity (GenericStream),
- * this service only keeps the process alive + shows a LIVE notification.
+ * The process-scoped StreamController owns the encoder independently of Activity.
+ * Notification actions stop that same controller before removing the service.
  */
 class StreamService : Service() {
+
+    private var session = -1
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -28,15 +31,26 @@ class StreamService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                StreamController.getInstance(this).stopStream()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
             }
             else -> {
+                session = intent?.getIntExtra(EXTRA_SESSION, -1) ?: -1
                 startForeground(NOTIF_ID, buildNotification())
-                return START_STICKY
+                if (!StreamController.getInstance(this).isStreamingNow()) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
+                return START_NOT_STICKY
             }
         }
+    }
+
+    override fun onDestroy() {
+        StreamController.getInstance(this).onServiceDestroyed(session)
+        super.onDestroy()
     }
 
     private fun createChannel() {
@@ -61,8 +75,8 @@ class StreamService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Hoge Broadcaster - LIVE")
-            .setContentText("RTMP配信中。タップでアプリに戻る")
+            .setContentTitle("Hoge Broadcaster")
+            .setContentText("RTMP配信処理中 (接続・再接続を含む)。タップでアプリに戻る")
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setContentIntent(openApp)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "停止", stopIntent)
@@ -75,9 +89,12 @@ class StreamService : Service() {
         const val NOTIF_ID = 1001
         const val ACTION_START = "com.example.hogebroadcaster.START"
         const val ACTION_STOP = "com.example.hogebroadcaster.STOP"
+        private const val EXTRA_SESSION = "stream_session"
 
-        fun start(context: Context) {
-            val intent = Intent(context, StreamService::class.java).setAction(ACTION_START)
+        fun start(context: Context, session: Int) {
+            val intent = Intent(context, StreamService::class.java)
+                .setAction(ACTION_START)
+                .putExtra(EXTRA_SESSION, session)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
