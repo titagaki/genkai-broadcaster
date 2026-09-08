@@ -163,7 +163,7 @@ fun SettingsScreen(
                             value = bitrateKbps.toFloat(),
                             onValueChange = {
                                 bitrateKbps = it.toInt()
-                                if (isStreaming) controller.setVideoBitrateOnFly(bitrateKbps * 1000)
+                                if (isStreaming) controller.setVideoBitrateKbpsOnFly(bitrateKbps)
                             },
                             onValueChangeFinished = { persist() },
                             valueRange = StreamConfig.BITRATE_MIN_KBPS.toFloat()..StreamConfig.BITRATE_MAX_KBPS.toFloat(),

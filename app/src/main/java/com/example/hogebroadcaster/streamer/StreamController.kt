@@ -61,6 +61,7 @@ data class StreamState(
     val startedAtMs: Long? = null,
     val zoom: CameraZoomState = CameraZoomState(),
     val selectedLens: LensOption? = null,
+    val cameraIsFront: Boolean = false,
     val cameraError: String? = null
 )
 
@@ -100,7 +101,7 @@ class StreamController private constructor(context: Context) {
     private var genericStream: StreamBase? = null
     private var surfaceView: SurfaceView? = null
     private var surfaceCallback: SurfaceHolder.Callback? = null
-    private var preparedKey: String? = null
+    private var preparedConfig: StreamPreparationConfig? = null
     private var generation = 0
     private var savedLens: LensOption? = null
     private var pendingLens: LensOption? = null
@@ -162,10 +163,19 @@ class StreamController private constructor(context: Context) {
 
     private fun releaseEngine() {
         val stream = genericStream ?: return
-        savedLens = currentLens() ?: savedLens
+        val requestedLens = pendingLens
+        when {
+            requestedLens != null -> {
+                savedLens = requestedLens
+                savedFront = requestedLens.isFront
+            }
+            awaitingCaptureGeneration == null -> {
+                savedLens = state.value.selectedLens ?: savedLens
+                savedFront = state.value.cameraIsFront
+                savedZoomRatio = state.value.zoom.ratio
+            }
+        }
         pendingLens = null
-        savedFront = isFrontCamera()
-        savedZoomRatio = state.value.zoom.ratio
         activePhysicalCameraId = null
         cameraCaptureReady = false
         activeCaptureSession = null
@@ -174,7 +184,7 @@ class StreamController private constructor(context: Context) {
         ++cameraChangeGeneration
         ++generation // 古いクライアントの遅延通知を次の配信へ持ち越さない
         genericStream = null
-        preparedKey = null
+        preparedConfig = null
         mutableState.value = state.value.copy(previewReady = false)
         stream.release()
     }
@@ -204,11 +214,7 @@ class StreamController private constructor(context: Context) {
                 if (surfaceView === sv) genericStream?.getGlInterface()?.setPreviewResolution(width, height)
             }
             override fun surfaceDestroyed(holder: SurfaceHolder) {
-                if (surfaceView === sv) {
-                    mutableState.value = state.value.copy(previewReady = false)
-                    if (genericStream?.isOnPreview == true) genericStream?.stopPreview()
-                    if (!isStreamingNow()) releaseEngine()
-                }
+                if (surfaceView === sv) stopPreviewAndReleaseIfIdle()
             }
         }
         surfaceCallback = callback
@@ -221,6 +227,10 @@ class StreamController private constructor(context: Context) {
         surfaceCallback?.let { sv.holder.removeCallback(it) }
         surfaceCallback = null
         surfaceView = null
+        stopPreviewAndReleaseIfIdle()
+    }
+
+    private fun stopPreviewAndReleaseIfIdle() {
         mutableState.value = state.value.copy(previewReady = false)
         if (genericStream?.isOnPreview == true) genericStream?.stopPreview()
         if (!isStreamingNow()) releaseEngine()
@@ -232,15 +242,22 @@ class StreamController private constructor(context: Context) {
         if (!sv.holder.surface.isValid) return
         createStream()
         if (!isStreamingNow() && !prepareFromPrefs()) return
+        startPreparedPreviewIfReady(sv)
+    }
+
+    /** 準備済みエンジンへSurfaceを接続する。映像設定の準備は呼び出し側で完了させる。 */
+    private fun startPreparedPreviewIfReady(sv: SurfaceView? = surfaceView) {
+        val previewSurface = sv ?: return
+        if (!previewSurface.holder.surface.isValid) return
         if (genericStream?.isOnPreview == true) return
-        if (preparedKey == null) return
+        if (preparedConfig == null) return
         runCatching {
             val wasRunning = genericStream?.videoSource?.isRunning() == true
             if (!wasRunning) {
                 waitForCameraCapture()
                 pendingLens = savedLens ?: if (savedFront) null else defaultBackLens()
             }
-            genericStream?.startPreview(sv)
+            genericStream?.startPreview(previewSurface)
             // 配信中のSurface再接続ではカメラを開き直さない。
             if (!wasRunning) {
                 mutableState.value = state.value.copy(previewReady = false, cameraError = null)
@@ -264,29 +281,29 @@ class StreamController private constructor(context: Context) {
             return false
         }
         val res = RESOLUTIONS[StreamPrefs.loadResIndex(prefs)]
-        val width = res.width
-        val height = res.height
-        val videoBitrate = StreamPrefs.loadBitrateKbps(prefs) * 1000
-        val rotation = if (StreamPrefs.loadPortrait(prefs)) {
-            StreamConfig.PORTRAIT_ROTATION
-        } else {
-            StreamConfig.LANDSCAPE_ROTATION
-        }
+        val config = StreamPreparationConfig(
+            width = res.width,
+            height = res.height,
+            videoBitrateBps = bitrateKbpsToBps(StreamPrefs.loadBitrateKbps(prefs)),
+            rotation = if (StreamPrefs.loadPortrait(prefs)) {
+                StreamConfig.PORTRAIT_ROTATION
+            } else {
+                StreamConfig.LANDSCAPE_ROTATION
+            }
+        )
         createStream()
-        val key = StreamConfig.preparedKey(width, height, videoBitrate, rotation)
-        if (preparedKey == key) return true
-        val wasPreview = genericStream?.isOnPreview == true
-        if (wasPreview) genericStream?.stopPreview()
+        if (preparedConfig == config) return true
+        if (genericStream?.isOnPreview == true) genericStream?.stopPreview()
         mutableState.value = state.value.copy(previewReady = false)
-        preparedKey = null
+        preparedConfig = null
         val ok = runCatching {
             genericStream?.prepareVideo(
-                width, height, videoBitrate,
+                config.width, config.height, config.videoBitrateBps,
                 fps = StreamConfig.VIDEO_FPS,
                 iFrameInterval = StreamConfig.VIDEO_KEYFRAME_INTERVAL_SEC,
-                rotation = rotation,
+                rotation = config.rotation,
                 profile = StreamConfig.VIDEO_PROFILE,
-                level = H264Level.select(width, height, StreamConfig.VIDEO_FPS)
+                level = H264Level.select(config.width, config.height, StreamConfig.VIDEO_FPS)
             ) == true &&
                 genericStream?.prepareAudio(
                     StreamConfig.AUDIO_SAMPLE_RATE,
@@ -299,8 +316,7 @@ class StreamController private constructor(context: Context) {
             toast("Video/Audio 設定に失敗しました")
             return false
         }
-        preparedKey = key
-        if (wasPreview) startPreviewIfReady()
+        preparedConfig = config
         return true
     }
 
@@ -311,11 +327,13 @@ class StreamController private constructor(context: Context) {
     /** RTMP配信を開始する。URL不正時は開始せずToastで通知する */
     fun startStream(url: String) {
         if (isStreamingNow()) return
-        if (!url.startsWith("rtmp://")) {
+        if (!StreamPrefs.isAcceptedRtmpUrl(url)) {
             toast("rtmp:// から始まるURLを入力してください")
             return
         }
+        val resumePreview = genericStream?.isOnPreview == true
         if (!prepareFromPrefs()) return
+        if (resumePreview) startPreparedPreviewIfReady()
         mutableState.value = state.value.copy(isStreaming = true, isConnected = false,
             status = "接続中...", stats = "", startedAtMs = null)
         try {
@@ -350,10 +368,12 @@ class StreamController private constructor(context: Context) {
         if (generation == session) stopStream()
     }
 
-    /** 配信中に映像ビットレートを変更する (bps) */
-    fun setVideoBitrateOnFly(bitrate: Int) {
-        runCatching { genericStream?.setVideoBitrateOnFly(bitrate) }
+    /** 配信中に映像ビットレートを変更する (kbps) */
+    fun setVideoBitrateKbpsOnFly(bitrateKbps: Int) {
+        runCatching { genericStream?.setVideoBitrateOnFly(bitrateKbpsToBps(bitrateKbps)) }
     }
+
+    private fun bitrateKbpsToBps(bitrateKbps: Int): Int = bitrateKbps * 1000
 
     // ---------- camera / mic ----------
 
@@ -375,7 +395,9 @@ class StreamController private constructor(context: Context) {
         awaitingCaptureGeneration = null
         camera.setCameraCallback(object : CameraCallbacks {
             override fun onCameraChanged(facing: CameraHelper.Facing) = onMainThreadHandler {
-                if (genericStream?.videoSource === camera && pendingLens == null) refreshZoomState()
+                if (genericStream?.videoSource === camera && pendingLens == null && cameraCaptureReady) {
+                    refreshZoomState()
+                }
             }
 
             override fun onCameraError(error: String) = onMainThreadHandler {
@@ -450,6 +472,7 @@ class StreamController private constructor(context: Context) {
         cameraCaptureReady = false // 再オープン時の1xを保存値として採用しない。
         mutableState.value = state.value.copy(
             selectedLens = lens,
+            cameraIsFront = savedFront,
             cameraError = null,
             previewReady = genericStream?.isOnPreview == true
         )
@@ -474,7 +497,6 @@ class StreamController private constructor(context: Context) {
         val message = "カメラ切替失敗: $error"
         mutableState.value = state.value.copy(
             previewReady = false,
-            selectedLens = null,
             cameraError = message
         )
         toast(message)
@@ -610,6 +632,12 @@ class StreamController private constructor(context: Context) {
         return applyZoom(camera, target)
     }
 
+    /** 現在倍率を基準にピンチ操作の倍率変化を適用する。 */
+    fun changeZoomBy(scale: Float): Float {
+        if (!scale.isFinite() || scale == 1f) return state.value.zoom.ratio
+        return setZoomRatio(state.value.zoom.ratio * scale)
+    }
+
     private fun applyZoom(camera: Camera2Source, target: Float): Float {
         val baseRatio = state.value.zoom.baseRatio
         val nativeTarget = target / baseRatio
@@ -734,7 +762,7 @@ class StreamController private constructor(context: Context) {
             savedLens = lens
             savedFront = lens.isFront
             savedZoomRatio = zoomRatio
-            mutableState.value = state.value.copy(selectedLens = null, cameraError = null)
+            mutableState.value = state.value.copy(cameraError = null)
             startPreviewIfReady()
             return true
         }

@@ -64,7 +64,6 @@ import com.example.hogebroadcaster.streamer.RESOLUTIONS
 import com.example.hogebroadcaster.streamer.StreamConfig
 import com.example.hogebroadcaster.streamer.StreamController
 import com.example.hogebroadcaster.streamer.StreamPrefs
-import com.example.hogebroadcaster.system.BatteryInfo
 import com.example.hogebroadcaster.system.BatteryMonitor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -87,42 +86,8 @@ fun StreamScreen(
     val status = urlError ?: streamState.cameraError ?: streamState.status
     val resolution = remember(prefs) { RESOLUTIONS[StreamPrefs.loadResIndex(prefs)] }
     val dimensions = resolution.dimensions(portrait)
-    val selectedLens = streamState.selectedLens ?: controller.currentLens()
-    val isFront = selectedLens?.isFront ?: controller.isFrontCamera()
+    val isFront = streamState.cameraIsFront
     var showCameraMenu by remember { mutableStateOf(false) }
-    var meterLevel by remember { mutableFloatStateOf(0f) }
-    var gestureZoomRatio by remember { mutableFloatStateOf(streamState.zoom.ratio) }
-    val startedAtMs = streamState.startedAtMs
-    var streamSeconds by remember(startedAtMs) {
-        mutableLongStateOf(startedAtMs?.let { (SystemClock.elapsedRealtime() - it) / 1000 } ?: 0L)
-    }
-    val appContext = LocalContext.current.applicationContext
-    var battery by remember { mutableStateOf(BatteryMonitor.getInfo(appContext)) }
-
-    LaunchedEffect(startedAtMs) {
-        if (startedAtMs != null) {
-            while (isActive) {
-                streamSeconds = (SystemClock.elapsedRealtime() - startedAtMs) / 1000
-                delay(1000)
-            }
-        }
-    }
-    LaunchedEffect(controller, streamState.muted) {
-        while (isActive) {
-            meterLevel = if (streamState.muted) 0f else max(controller.micLevel(), meterLevel * 0.75f)
-            if (meterLevel < 0.01f) meterLevel = 0f
-            delay(100)
-        }
-    }
-    LaunchedEffect(streamState.zoom.ratio) {
-        gestureZoomRatio = streamState.zoom.ratio
-    }
-    LaunchedEffect(appContext) {
-        while (isActive) {
-            battery = BatteryMonitor.getInfo(appContext)
-            delay(30_000)
-        }
-    }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
@@ -135,7 +100,7 @@ fun StreamScreen(
                 if (!streamState.previewReady) return@pointerInput
                 detectTransformGestures { _, _, zoomChange, _ ->
                     if (zoomChange.isFinite() && zoomChange != 1f) {
-                        gestureZoomRatio = controller.setZoomRatio(gestureZoomRatio * zoomChange)
+                        controller.changeZoomBy(zoomChange)
                     }
                 }
             }
@@ -147,9 +112,7 @@ fun StreamScreen(
                 status = status,
                 dimensions = dimensions,
                 stats = streamState.stats,
-                streamSeconds = streamSeconds,
-                showStreamTime = startedAtMs != null,
-                battery = battery,
+                startedAtMs = streamState.startedAtMs,
                 modifier = Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 12.dp, end = 72.dp)
             )
 
@@ -161,8 +124,9 @@ fun StreamScreen(
                 modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
             )
 
-            AudioMeter(
-                level = meterLevel,
+            LiveAudioMeter(
+                controller = controller,
+                muted = streamState.muted,
                 modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp)
             )
 
@@ -202,7 +166,7 @@ fun StreamScreen(
                             controller.stopStream()
                         } else {
                             val url = StreamPrefs.buildFullUrl(prefs)
-                            if (url.startsWith("rtmp://")) controller.startStream(url)
+                            if (StreamPrefs.isAcceptedRtmpUrl(url)) controller.startStream(url)
                             else urlError = "配信先URLが不正です"
                         }
                     }
@@ -227,13 +191,30 @@ private fun StreamInfo(
     status: String,
     dimensions: String,
     stats: String,
-    streamSeconds: Long,
-    showStreamTime: Boolean,
-    battery: BatteryInfo,
+    startedAtMs: Long?,
     modifier: Modifier = Modifier
 ) {
+    var streamSeconds by remember(startedAtMs) {
+        mutableLongStateOf(startedAtMs?.let { (SystemClock.elapsedRealtime() - it) / 1000 } ?: 0L)
+    }
+    val appContext = LocalContext.current.applicationContext
+    var battery by remember { mutableStateOf(BatteryMonitor.getInfo(appContext)) }
+    LaunchedEffect(startedAtMs) {
+        if (startedAtMs != null) {
+            while (isActive) {
+                streamSeconds = (SystemClock.elapsedRealtime() - startedAtMs) / 1000
+                delay(1000)
+            }
+        }
+    }
+    LaunchedEffect(appContext) {
+        while (isActive) {
+            battery = BatteryMonitor.getInfo(appContext)
+            delay(30_000)
+        }
+    }
     val details = buildList {
-        if (showStreamTime) {
+        if (startedAtMs != null) {
             val hours = streamSeconds / 3600
             val minutes = streamSeconds / 60 % 60
             add(
@@ -267,6 +248,27 @@ private fun StreamInfo(
             )
         }
     }
+}
+
+@Composable
+private fun LiveAudioMeter(
+    controller: StreamController,
+    muted: Boolean,
+    modifier: Modifier = Modifier
+) {
+    var meterLevel by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(controller, muted) {
+        if (muted) {
+            meterLevel = 0f
+            return@LaunchedEffect
+        }
+        while (isActive) {
+            meterLevel = max(controller.micLevel(), meterLevel * 0.75f)
+            if (meterLevel < 0.01f) meterLevel = 0f
+            delay(100)
+        }
+    }
+    AudioMeter(level = if (muted) 0f else meterLevel, modifier = modifier)
 }
 
 @Composable

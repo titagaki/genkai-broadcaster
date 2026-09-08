@@ -1,141 +1,74 @@
-# リファクタリング候補
+# リファクタリング記録
 
-- 作成日: 2026-09-07
-- 対象: 縦横配信・UI見直し後の作業ツリー (未コミット変更を含む)
-- 状態: 2026-09-07時点のレビュー記録。現在の実装状況は各項目へ着手する前に再確認する。
-- 確認方法: コードの静的調査。ビルド・実機検証は未実施。
+- 初回レビュー: 2026-09-07
+- 実施日: 2026-09-08
+- 状態: コード変更と静的検証は完了。Android Studioでのビルドと実機確認は未実施
 
-大きなクラス分割より、状態の二重管理と準備・停止処理の重複を減らすことを優先する。
-振る舞いの正本は [製品仕様](../product/spec.md)。不具合修正や仕様変更は、構造だけの整理と分けて扱う。
+振る舞いの正本は[製品仕様](../product/spec.md)です。本書は、静的レビューで見つかった
+重複・二重管理と、その修正内容を記録します。
 
-## 優先順位
+## 実施結果
 
-| 順位 | 候補 | 優先度 | 規模 | 主な効果 |
-|------|------|--------|------|----------|
-| 1 | カメラ表示状態をControllerへ一本化 | 高 | 小〜中 | 同期漏れ・重複の削減 |
-| 2 | プレビューの準備・開始・停止を整理 | 高 | 小〜中 | ライフサイクル処理の見通し改善 |
-| 3 | 準備設定の型化と単位変換の集約 | 中 | 小 | 比較条件・単位の取り違え防止 |
-| 4 | URL検証ルールの共通化 | 中 | 小 | 検証変更時の修正漏れ防止 |
-| 5 | 高頻度の表示更新を局所化 | 低〜中 | 小 | 画面構成と更新処理の分離 |
+| 項目 | 状態 | 主な変更 |
+|------|------|----------|
+| カメラ表示状態の一本化 | 完了 | 前後・レンズ・倍率を`StreamState`から表示 |
+| プレビュー処理の一方向化 | 完了 | 準備とSurface接続を分離し、停止処理を共通化 |
+| 準備設定の型化 | 完了 | 連結文字列を`StreamPreparationConfig`へ置換 |
+| ビットレート単位の集約 | 完了 | UIはkbps、Controller内でbpsへ変換 |
+| RTMP URL判定の共通化 | 完了 | `StreamPrefs.isAcceptedRtmpUrl()`へ集約 |
+| 高頻度UI更新の局所化 | 完了 | 音量、経過時間、電池の状態を表示部品内へ移動 |
+| レンズ重複判定 | 完了 | 表示ラベルではなくCamera2 IDの組で識別 |
 
-## 1. カメラ表示状態をControllerへ一本化
+## カメラ状態
 
-対象: [StreamScreen.kt](../../app/src/main/java/com/example/hogebroadcaster/ui/StreamScreen.kt) の
-`isFront` / `lensId` / ズーム倍率とカメラ操作コールバック、
-[StreamController.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt) の
-`selectCamera()` / `openLens()` / `setZoomRatio()`。
+対象: [StreamController.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt)、
+[StreamScreen.kt](../../app/src/main/java/com/example/hogebroadcaster/ui/StreamScreen.kt)
 
-### 現状
+- `StreamState`に`cameraIsFront`、`selectedLens`、`zoom`、`cameraError`を保持する。
+- UIはControllerへ現在値を再照会せず、`StateFlow`の確定済み状態だけを表示する。
+- ピンチ倍率は`changeZoomBy()`で現在倍率へ適用し、UI側に倍率の複製を持たない。
+- 復元要求の`savedLens`、`savedFront`、`savedZoomRatio`と、公開する確定状態を区別する。
+- カメラ切替待機中にSurfaceが外れても、要求中の復元値を古い確定状態で上書きしない。
 
-- ControllerとUIの両方にカメラ状態がある。
-- 前面選択・背面選択・レンズ選択・プレビュー復帰のたびに、UIが同じ状態を取り直している。
-- 操作追加時や切替途中の失敗時に、実機と表示の同期を忘れやすい。
+## プレビュー処理
 
-### 進め方
+対象: [StreamController.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt)
 
-- 既存の `StreamState` に表示用のカメラ状態を追加し、UIは購読だけにする。
-- Controller内に実状態を取得・通知するprivate関数を置き、切替・復元・失敗後に呼ぶ。
-- 復元用の「選択していた値」と、実機の「現在値」は区別する。保存値をそのまま実状態として表示しない。
-- 専用の `CameraController` は新設せず、まず現在のController内で整理する。
+- `stopPreviewAndReleaseIfIdle()`へSurface喪失時の共通処理を集約した。
+- `prepareFromPrefs()`は映像・音声の準備と成否返却だけを担当する。
+- `startPreparedPreviewIfReady()`は準備済みエンジンへのSurface接続だけを担当する。
+- 準備関数から`startPreviewIfReady()`を呼び戻さず、呼び出し元が再開を判断する。
+- 配信中のSurface再接続では、動作中のカメラを開き直さない。
+- エンジン世代、Service session、CaptureSession世代による遅延通知の除外は維持する。
 
-確認: 前後・レンズ切替、切替失敗、設定往復、Activity再生成後の表示と実状態の一致。
+## 設定と単位
 
-## 2. プレビュー処理を一方向にする
+対象: [StreamConfig.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamConfig.kt)、
+[StreamPrefs.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamPrefs.kt)、
+[SettingsScreen.kt](../../app/src/main/java/com/example/hogebroadcaster/ui/SettingsScreen.kt)
 
-対象: [StreamController.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt) の
-`attachSurface()` / `detachSurface()` / `startPreviewIfReady()` / `prepareFromPrefs()`。
+- 準備済み条件は幅、高さ、映像ビットレート、回転を持つ`StreamPreparationConfig`で比較する。
+- SharedPreferencesとUIのビットレート単位は従来どおりkbpsとする。
+- RootEncoderへ渡す直前だけController内でbpsへ変換する。
+- URLの許可条件は従来どおり、小文字の`rtmp://`で始まることとする。
+- UIとControllerは同じ判定関数を使い、画面内エラーとToastの役割分担は維持する。
 
-### 現状
+## UI更新範囲
 
-- `surfaceDestroyed()` と `detachSurface()` に、プレビュー状態の解除・停止・非配信時のエンジン解放が重複する。
-- `startPreviewIfReady()` → `prepareFromPrefs()` → `startPreviewIfReady()` という呼び戻しがある。
-  準備済みキーで収束するが、再開条件を追いにくい。
+対象: [StreamScreen.kt](../../app/src/main/java/com/example/hogebroadcaster/ui/StreamScreen.kt)
 
-### 進め方
+- 100msごとの音量取得と減衰は`LiveAudioMeter`内で管理する。
+- 1秒ごとの経過時間と30秒ごとの電池取得は`StreamInfo`内で管理する。
+- 開始時刻は引き続きControllerの`StreamState.startedAtMs`を正本とする。
+- 画面を離れると各`LaunchedEffect`がCompositionとともに停止する。
 
-- Surfaceの登録・コールバック解除は各処理に残し、共通の停止・必要時解放だけprivate関数へまとめる。
-- 「設定からエンコーダを準備する」と「準備済みエンコーダでプレビューを開始する」を分離する。
-- 再開の判断は呼び出し側で行い、準備関数から開始関数へ呼び戻さない。
-- 古い接続通知やService終了通知を除外する世代チェックは維持する。
-  配信中のSurface再接続だけでカメラを開き直さないことも維持する。
+## 実機確認
 
-確認: 縦横切替、設定往復、バックグラウンド復帰、通知停止、再接続断念、停止直後の再開始。
-RootEncoderの非同期停止については [rootencoder.md](rootencoder.md) を参照する。
+詳しい手順は[開発環境・ビルド](development.md)を参照してください。特に次を確認します。
 
-## 3. 準備設定の型化と単位変換の集約
-
-対象: [StreamController.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt) の
-`prepareFromPrefs()` / `setVideoBitrateOnFly()`、
-[StreamConfig.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamConfig.kt) の `preparedKey()`、
-[SettingsScreen.kt](../../app/src/main/java/com/example/hogebroadcaster/ui/SettingsScreen.kt) のビットレート変更。
-
-### 現状
-
-- 準備条件は複数の変数で組み立て、同一性を連結文字列 `preparedKey` で表している。
-- 設定項目を増やすと、準備引数と比較キーの片方だけ更新する余地がある。
-- kbpsからbpsへの変換がControllerとUIに分散している。
-
-### 進め方
-
-- 幅・高さ・ビットレート・回転を持つ小さな `data class` を作り、その値自体を準備済み条件と比較する。
-- UI向けのビットレート変更APIは名前も含めてkbpsに揃え、bps変換はController内で行う。
-- SharedPreferencesの保存形式・既存値・移行処理は変更しない。
-
-確認: 同一設定では不要な再準備をしないこと、方向だけの変更でも再準備すること、配信中のビットレート変更値。
-
-## 4. URL検証ルールの共通化
-
-対象: [StreamScreen.kt](../../app/src/main/java/com/example/hogebroadcaster/ui/StreamScreen.kt) の開始操作、
-[StreamController.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt) の `startStream()`、
-[StreamPrefs.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamPrefs.kt) の `buildFullUrl()` 付近。
-
-### 現状と進め方
-
-- `startsWith("rtmp://")` がUIとControllerに重複している。
-- URL組み立ての近くに副作用のない検証関数を1つ置き、両方から利用する。
-- Controller側の防御的チェックは残し、画面内エラー表示とToastの違いも維持する。
-- ホスト名の検証など、受け付けるURLを変える強化は別の振る舞い変更として扱う。
-
-確認: 正常URL・不正スキーム・空欄・キー空欄・旧設定移行後の開始可否とエラー表示が変わらないこと。
-
-## 5. 高頻度の表示更新を局所化
-
-対象: [StreamScreen.kt](../../app/src/main/java/com/example/hogebroadcaster/ui/StreamScreen.kt) の
-音量・経過時間・電池情報の状態と `LaunchedEffect`。
-
-### 現状と進め方
-
-- 100msごとの音量、1秒ごとの経過時間、30秒ごとの電池情報を画面最上位で管理している。
-- まず音量の取得・減衰・表示を、privateなメーター用Composableへまとめる。
-- 必要なら経過時間と電池情報もヘッダー側へ寄せる。表示関数だけでなく更新状態も移す。
-- 実際の性能問題は未確認。改善を断定せず、汎用タイマー管理クラスや監視Serviceは追加しない。
-
-確認: ミュート時の即時消灯、画面離脱時の更新停止、復帰時の経過時間維持。開始時刻は引き続きControllerで保持する。
-
-## 別件の不具合修正候補
-
-[CameraLenses.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/CameraLenses.kt) の
-`distinctBy { it.label }` は、前面・背面の丸め後の画角ラベルが同じ場合に一方を一覧から落とす可能性がある。
-
-- 重複判定に少なくとも `isFront` を含める修正を検討する。
-- 選択肢が変わるため、上記リファクタリングとは別の不具合修正として扱う。
-- 対象端末での再現は未確認。
-
-## 今は行わない整理
-
-- `MainActivity` の専用Manager化。現在の生成・表示・方向指定・権限要求の範囲で十分。
-- 2画面だけのため、Navigation導入は見送る。
-- DI・Repository・DataStoreの導入や、Controllerを多数のManagerへ分割する変更は今回の目的には過剰。
-- ファイルが長いという理由だけで、画面固有のprivate Composableを共通部品へ移さない。
-
-## 着手順と検証
-
-1. カメラ表示状態の一本化。
-2. プレビュー処理の整理。
-3. 準備設定の型化・単位変換の集約。
-4. URL検証の共通化。
-5. 必要に応じて表示更新の局所化。
-
-候補ごとに小さな差分で進め、振る舞い変更を混ぜない。
-エージェント側の括弧チェック・参照残り確認だけでは型や実機動作を保証できない。
-各段階でWindows側Android Studioによるビルドと、[development.md](development.md) の実機確認を行う。
+- 設定画面往復、Activity再生成、バックグラウンド復帰後もカメラ表示と実映像が一致する。
+- カメラ切替中に画面を離れても、復帰後に要求したカメラと倍率が適用される。
+- 解像度、ビットレート、方向のいずれかを変えた場合だけ再準備される。
+- 配信中のビットレート変更が800,000～8,000,000 bpsとして反映される。
+- URLエラー表示、自動再接続、通知停止、停止直後のプレビュー再開が従来どおり動作する。
+- 音量の減衰、ミュート時の即時消灯、経過時間、電池表示が従来どおり更新される。

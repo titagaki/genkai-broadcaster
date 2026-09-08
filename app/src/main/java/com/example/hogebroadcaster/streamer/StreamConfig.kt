@@ -48,10 +48,14 @@ object StreamConfig {
     const val PREFS_FILE = "hoge_broadcaster"
     const val DEFAULT_SERVER = "rtmp://pcgw.pgw.jp/live"
 
-    /** prepare済み設定の識別キー。設定変更検出に使う */
-    fun preparedKey(width: Int, height: Int, videoBitrate: Int, rotation: Int): String =
-        "$width-$height-$videoBitrate-$rotation"
 }
+
+internal data class StreamPreparationConfig(
+    val width: Int,
+    val height: Int,
+    val videoBitrateBps: Int,
+    val rotation: Int
+)
 
 data class Resolution(val label: String, val width: Int, val height: Int) {
     fun outputWidth(portrait: Boolean): Int = if (portrait) height else width

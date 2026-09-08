@@ -16,7 +16,7 @@ Hoge Broadcasterの文書を目的別に分類しています。
 | [アーキテクチャ](engineering/architecture.md) | 技術スタック、層構成、依存方向のルール |
 | [開発環境・ビルド](engineering/development.md) | 検証済みバージョン、ビルド手順、実機確認、トラブル履歴 |
 | [RootEncoder統合メモ](engineering/rootencoder.md) | 使用API、確認済みの挙動、実装上の制約 |
-| [リファクタリング候補](engineering/refactoring.md) | 過去の技術レビューと整理案。実装済み仕様の正本ではない |
+| [リファクタリング記録](engineering/refactoring.md) | 技術レビューで見つかった問題と修正内容、実機確認項目 |
 
 ## Integrations
 

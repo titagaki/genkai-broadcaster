@@ -81,4 +81,7 @@ object StreamPrefs {
         val key = loadKey(prefs).trim().trim('/')
         return if (key.isEmpty()) server else "$server/$key"
     }
+
+    /** 現在対応しているRTMP URL規則。詳細なURL検証とは分けて扱う。 */
+    fun isAcceptedRtmpUrl(url: String): Boolean = url.startsWith("rtmp://")
 }
