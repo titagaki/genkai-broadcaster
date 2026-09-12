@@ -66,3 +66,11 @@ SRT、RTSP、WHIP、端末内録画には対応していません。
 - [アーキテクチャ](docs/engineering/architecture.md)
 - [RootEncoder統合メモ](docs/engineering/rootencoder.md)
 - [PeerCast接続ガイド](docs/integrations/peercast.md)
+
+## ライセンス
+
+このアプリは [MIT License](LICENSE) で公開しています。
+
+使用しているオープンソースライブラリ (RootEncoder、Kotlin、AndroidX、Jetpack Compose) は
+いずれも Apache License 2.0 で配布されています。一覧とライセンス全文は
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照してください。
