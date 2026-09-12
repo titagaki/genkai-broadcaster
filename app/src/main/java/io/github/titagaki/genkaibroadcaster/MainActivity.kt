@@ -1,7 +1,6 @@
 package io.github.titagaki.genkaibroadcaster
 
 import android.Manifest
-import android.content.SharedPreferences
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.os.Build
@@ -11,8 +10,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
-import io.github.titagaki.genkaibroadcaster.streamer.StreamConfig
 import io.github.titagaki.genkaibroadcaster.streamer.StreamController
+import io.github.titagaki.genkaibroadcaster.streamer.StreamPrefs
 import io.github.titagaki.genkaibroadcaster.ui.AppRoot
 
 /**
@@ -26,7 +25,7 @@ import io.github.titagaki.genkaibroadcaster.ui.AppRoot
 class MainActivity : ComponentActivity() {
 
     private lateinit var controller: StreamController
-    private lateinit var prefs: SharedPreferences
+    private lateinit var prefs: StreamPrefs
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -40,7 +39,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        prefs = getSharedPreferences(StreamConfig.PREFS_FILE, MODE_PRIVATE)
+        prefs = StreamPrefs(this)
         controller = StreamController.getInstance(this)
         setContent {
             AppRoot(
@@ -62,7 +61,7 @@ class MainActivity : ComponentActivity() {
     /** カメラ/マイク (+通知) 権限を要求する。設定画面の「権限を再確認」からも呼ばれる */
     fun requestPermissionsIfNeeded() {
         val permissions = mutableListOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
-        if (Build.VERSION.SDK_INT >= 33) permissions += Manifest.permission.POST_NOTIFICATIONS
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) permissions += Manifest.permission.POST_NOTIFICATIONS
         val missing = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }

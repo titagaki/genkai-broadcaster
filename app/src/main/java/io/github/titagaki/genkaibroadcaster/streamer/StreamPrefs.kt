@@ -1,32 +1,44 @@
 package io.github.titagaki.genkaibroadcaster.streamer
 
+import android.content.Context
 import android.content.SharedPreferences
 
 /**
  * 配信設定の SharedPreferences 読み書きを集約する。
  *
- * UI層はこのオブジェクト経由でのみ設定に触ること。
- * 生のキー文字列をUI層に書かない。
+ * UI層はこのクラス経由でのみ設定に触ること。生のキー文字列や
+ * [SharedPreferences] をUI層に持ち込まない。
+ * 同じファイルを指す SharedPreferences はプロセス内で共有されるので、
+ * インスタンスを複数作っても同じ値を読み書きする。
  */
-object StreamPrefs {
-    private const val KEY_DESTINATIONS = "destinations"
-    private const val KEY_ACTIVE_DESTINATION = "active_destination"
-    private const val KEY_RES_INDEX = "res_index"
-    private const val KEY_BITRATE_KBPS = "bitrate_kbps"
-    private const val KEY_FPS = "video_fps"
-    private const val KEY_PORTRAIT = "stream_portrait"
-    private const val KEY_SOFTWARE_ENCODER = "software_encoder"
+class StreamPrefs(context: Context) {
 
-    /** 旧版のキー。複数接続先 (destinations) へ移行後に削除される */
-    private const val KEY_LEGACY_URL = "rtmp_url"
-    private const val KEY_LEGACY_SERVER = "rtmp_server"
-    private const val KEY_LEGACY_STREAM_KEY = "stream_key"
+    private val prefs: SharedPreferences =
+        context.applicationContext.getSharedPreferences(StreamConfig.PREFS_FILE, Context.MODE_PRIVATE)
+
+    companion object {
+        private const val KEY_DESTINATIONS = "destinations"
+        private const val KEY_ACTIVE_DESTINATION = "active_destination"
+        private const val KEY_RES_INDEX = "res_index"
+        private const val KEY_BITRATE_KBPS = "bitrate_kbps"
+        private const val KEY_FPS = "video_fps"
+        private const val KEY_PORTRAIT = "stream_portrait"
+        private const val KEY_SOFTWARE_ENCODER = "software_encoder"
+
+        /** 旧版のキー。複数接続先 (destinations) へ移行後に削除される */
+        private const val KEY_LEGACY_URL = "rtmp_url"
+        private const val KEY_LEGACY_SERVER = "rtmp_server"
+        private const val KEY_LEGACY_STREAM_KEY = "stream_key"
+
+        /** 現在対応しているRTMP URL規則。詳細なURL検証とは分けて扱う。 */
+        fun isAcceptedRtmpUrl(url: String): Boolean = url.startsWith("rtmp://")
+    }
 
     /**
      * 旧版 (単一の rtmp_url、または rtmp_server + stream_key) から複数接続先へ移行する。
      * destinations が無い場合だけ実行し、旧値を1件目の接続先として取り込む。
      */
-    private fun migrateLegacy(prefs: SharedPreferences) {
+    private fun migrateLegacy() {
         if (prefs.contains(KEY_DESTINATIONS)) return
 
         val legacyUrl = prefs.getString(KEY_LEGACY_URL, "").orEmpty()
@@ -46,56 +58,56 @@ object StreamPrefs {
             .apply()
     }
 
-    fun loadDestinations(prefs: SharedPreferences): List<StreamDestination> {
-        migrateLegacy(prefs)
+    fun loadDestinations(): List<StreamDestination> {
+        migrateLegacy()
         return StreamDestination.listFromJson(prefs.getString(KEY_DESTINATIONS, "").orEmpty())
     }
 
     /** 保存済みIDが一覧に無ければ先頭を採用する。一覧が空なら null */
-    fun loadActiveDestinationId(prefs: SharedPreferences): String? {
-        val list = loadDestinations(prefs)
+    fun loadActiveDestinationId(): String? = activeDestinationOf(loadDestinations())?.id
+
+    fun loadActiveDestination(): StreamDestination? = activeDestinationOf(loadDestinations())
+
+    private fun activeDestinationOf(list: List<StreamDestination>): StreamDestination? {
         val saved = prefs.getString(KEY_ACTIVE_DESTINATION, null)
-        return list.firstOrNull { it.id == saved }?.id ?: list.firstOrNull()?.id
+        return list.firstOrNull { it.id == saved } ?: list.firstOrNull()
     }
 
-    fun loadActiveDestination(prefs: SharedPreferences): StreamDestination? {
-        val id = loadActiveDestinationId(prefs) ?: return null
-        return loadDestinations(prefs).firstOrNull { it.id == id }
-    }
-
-    fun saveDestinations(prefs: SharedPreferences, list: List<StreamDestination>, activeId: String?) {
+    fun saveDestinations(list: List<StreamDestination>, activeId: String?) {
         prefs.edit()
             .putString(KEY_DESTINATIONS, StreamDestination.listToJson(list))
             .putString(KEY_ACTIVE_DESTINATION, activeId)
             .apply()
     }
 
-    fun loadResIndex(prefs: SharedPreferences): Int =
-        prefs.getInt(KEY_RES_INDEX, StreamConfig.DEFAULT_RES_INDEX).coerceIn(RESOLUTIONS.indices)
+    fun loadResIndex(): Int =
+        prefs.getInt(KEY_RES_INDEX, StreamConfig.DEFAULT_RES_INDEX).coerceIn(StreamConfig.RESOLUTIONS.indices)
 
-    fun loadBitrateKbps(prefs: SharedPreferences): Int =
+    fun loadResolution(): Resolution = StreamConfig.RESOLUTIONS[loadResIndex()]
+
+    fun loadBitrateKbps(): Int =
         prefs.getInt(KEY_BITRATE_KBPS, StreamConfig.DEFAULT_BITRATE_KBPS)
 
     /** 選択肢にない値が保存されていた場合は既定値へ戻す */
-    fun loadFps(prefs: SharedPreferences): Int =
+    fun loadFps(): Int =
         prefs.getInt(KEY_FPS, StreamConfig.DEFAULT_VIDEO_FPS)
             .takeIf { it in StreamConfig.FPS_OPTIONS } ?: StreamConfig.DEFAULT_VIDEO_FPS
 
-    fun loadPortrait(prefs: SharedPreferences): Boolean =
+    fun loadPortrait(): Boolean =
         prefs.getBoolean(KEY_PORTRAIT, StreamConfig.DEFAULT_PORTRAIT)
 
-    fun savePortrait(prefs: SharedPreferences, portrait: Boolean) {
+    fun savePortrait(portrait: Boolean) {
         prefs.edit().putBoolean(KEY_PORTRAIT, portrait).apply()
     }
 
-    fun loadSoftwareEncoder(prefs: SharedPreferences): Boolean =
+    fun loadSoftwareEncoder(): Boolean =
         prefs.getBoolean(KEY_SOFTWARE_ENCODER, StreamConfig.DEFAULT_SOFTWARE_ENCODER)
 
-    fun saveSoftwareEncoder(prefs: SharedPreferences, software: Boolean) {
+    fun saveSoftwareEncoder(software: Boolean) {
         prefs.edit().putBoolean(KEY_SOFTWARE_ENCODER, software).apply()
     }
 
-    fun saveVideo(prefs: SharedPreferences, resIndex: Int, bitrateKbps: Int, fps: Int) {
+    fun saveVideo(resIndex: Int, bitrateKbps: Int, fps: Int) {
         prefs.edit()
             .putInt(KEY_RES_INDEX, resIndex)
             .putInt(KEY_BITRATE_KBPS, bitrateKbps)
@@ -104,9 +116,5 @@ object StreamPrefs {
     }
 
     /** 選択中の接続先のフルURL。接続先が無ければ空文字 */
-    fun buildFullUrl(prefs: SharedPreferences): String =
-        loadActiveDestination(prefs)?.fullUrl().orEmpty()
-
-    /** 現在対応しているRTMP URL規則。詳細なURL検証とは分けて扱う。 */
-    fun isAcceptedRtmpUrl(url: String): Boolean = url.startsWith("rtmp://")
+    fun buildFullUrl(): String = loadActiveDestination()?.fullUrl().orEmpty()
 }

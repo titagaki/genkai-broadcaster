@@ -55,6 +55,17 @@ object StreamConfig {
 
     // ---- Resolution ----
     const val DEFAULT_RES_INDEX = 2 // 720p
+    /**
+     * label は一般的な呼び名 + 通称 (短辺の画素数 + p) を併記する。
+     * 保存値はこのリストのインデックスなので、順序変更・挿入時は DEFAULT_RES_INDEX と
+     * 既存の保存値のずれに注意。
+     */
+    val RESOLUTIONS = listOf(
+        Resolution("省データ (360p)", 640, 360),
+        Resolution("SD (480p)", 854, 480),
+        Resolution("HD (720p)", 1280, 720),
+        Resolution("Full HD (1080p)", 1920, 1080),
+    )
 
     // ---- Prefs ----
     const val PREFS_FILE = "genkai_broadcaster"
@@ -67,30 +78,3 @@ object StreamConfig {
     const val TWITCH_SERVER = "rtmp://live.twitch.tv/app"
 
 }
-
-internal data class StreamPreparationConfig(
-    val width: Int,
-    val height: Int,
-    val fps: Int,
-    val videoBitrateBps: Int,
-    val rotation: Int,
-    val softwareEncoder: Boolean
-)
-
-data class Resolution(val label: String, val width: Int, val height: Int) {
-    fun outputWidth(portrait: Boolean): Int = if (portrait) height else width
-    fun outputHeight(portrait: Boolean): Int = if (portrait) width else height
-    fun dimensions(portrait: Boolean): String = "${outputWidth(portrait)} x ${outputHeight(portrait)}"
-}
-
-/**
- * label は一般的な呼び名 + 通称 (短辺の画素数 + p) を併記する。
- * 保存値はこのリストのインデックスなので、順序変更・挿入時は DEFAULT_RES_INDEX と
- * 既存の保存値のずれに注意。
- */
-val RESOLUTIONS = listOf(
-    Resolution("省データ (360p)", 640, 360),
-    Resolution("SD (480p)", 854, 480),
-    Resolution("HD (720p)", 1280, 720),
-    Resolution("Full HD (1080p)", 1920, 1080),
-)
