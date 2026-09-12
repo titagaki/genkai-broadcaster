@@ -284,6 +284,7 @@ class StreamController private constructor(context: Context) {
         val config = StreamPreparationConfig(
             width = res.width,
             height = res.height,
+            fps = StreamPrefs.loadFps(prefs),
             videoBitrateBps = bitrateKbpsToBps(StreamPrefs.loadBitrateKbps(prefs)),
             rotation = if (StreamPrefs.loadPortrait(prefs)) {
                 StreamConfig.PORTRAIT_ROTATION
@@ -299,11 +300,11 @@ class StreamController private constructor(context: Context) {
         val ok = runCatching {
             genericStream?.prepareVideo(
                 config.width, config.height, config.videoBitrateBps,
-                fps = StreamConfig.VIDEO_FPS,
+                fps = config.fps,
                 iFrameInterval = StreamConfig.VIDEO_KEYFRAME_INTERVAL_SEC,
                 rotation = config.rotation,
                 profile = StreamConfig.VIDEO_PROFILE,
-                level = H264Level.select(config.width, config.height, StreamConfig.VIDEO_FPS)
+                level = H264Level.select(config.width, config.height, config.fps)
             ) == true &&
                 genericStream?.prepareAudio(
                     StreamConfig.AUDIO_SAMPLE_RATE,

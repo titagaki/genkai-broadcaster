@@ -13,7 +13,9 @@ object StreamConfig {
     const val LANDSCAPE_ROTATION = 0
     const val PORTRAIT_ROTATION = 90
     const val DEFAULT_PORTRAIT = false // 既存の横長出力を維持
-    const val VIDEO_FPS = 30
+    const val DEFAULT_VIDEO_FPS = 30
+    /** 選択できるフレームレート。60 はカメラが対応しない端末では実効 30 になる */
+    val FPS_OPTIONS = listOf(15, 24, 30, 60)
     const val CAMERA_SWITCH_TIMEOUT_MS = 5000L
 
     /**
@@ -35,14 +37,15 @@ object StreamConfig {
     const val RETRY_COUNT = 10
     const val RETRY_DELAY_MS = 5000L
 
-    // ---- Bitrate slider (UI, kbps) ----
-    const val BITRATE_MIN_KBPS = 800
-    const val BITRATE_MAX_KBPS = 8000
-    const val BITRATE_SLIDER_STEPS = 24
+    // ---- Bitrate stepper (UI, kbps) ----
+    const val BITRATE_MIN_KBPS = 100
+    const val BITRATE_MAX_KBPS = 10000
+    /** −/+ ボタン1回で増減する量 */
+    const val BITRATE_STEP_KBPS = 100
     const val DEFAULT_BITRATE_KBPS = 3000
 
     // ---- Resolution ----
-    const val DEFAULT_RES_INDEX = 1 // 720p
+    const val DEFAULT_RES_INDEX = 2 // 720p
 
     // ---- Prefs ----
     const val PREFS_FILE = "genkai_broadcaster"
@@ -53,6 +56,7 @@ object StreamConfig {
 internal data class StreamPreparationConfig(
     val width: Int,
     val height: Int,
+    val fps: Int,
     val videoBitrateBps: Int,
     val rotation: Int
 )
@@ -63,8 +67,14 @@ data class Resolution(val label: String, val width: Int, val height: Int) {
     fun dimensions(portrait: Boolean): String = "${outputWidth(portrait)} x ${outputHeight(portrait)}"
 }
 
+/**
+ * label は一般的な呼び名 + 通称 (短辺の画素数 + p) を併記する。
+ * 保存値はこのリストのインデックスなので、順序変更・挿入時は DEFAULT_RES_INDEX と
+ * 既存の保存値のずれに注意。
+ */
 val RESOLUTIONS = listOf(
-    Resolution("480p", 854, 480),
-    Resolution("720p", 1280, 720),
-    Resolution("1080p", 1920, 1080),
+    Resolution("省データ (360p)", 640, 360),
+    Resolution("SD (480p)", 854, 480),
+    Resolution("HD (720p)", 1280, 720),
+    Resolution("Full HD (1080p)", 1920, 1080),
 )

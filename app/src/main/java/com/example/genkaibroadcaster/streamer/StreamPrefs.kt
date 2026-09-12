@@ -13,6 +13,7 @@ object StreamPrefs {
     private const val KEY_STREAM_KEY = "stream_key"
     private const val KEY_RES_INDEX = "res_index"
     private const val KEY_BITRATE_KBPS = "bitrate_kbps"
+    private const val KEY_FPS = "video_fps"
     private const val KEY_PORTRAIT = "stream_portrait"
 
     /** 旧版の単一URLキー。移行後は削除される */
@@ -52,6 +53,11 @@ object StreamPrefs {
     fun loadBitrateKbps(prefs: SharedPreferences): Int =
         prefs.getInt(KEY_BITRATE_KBPS, StreamConfig.DEFAULT_BITRATE_KBPS)
 
+    /** 選択肢にない値が保存されていた場合は既定値へ戻す */
+    fun loadFps(prefs: SharedPreferences): Int =
+        prefs.getInt(KEY_FPS, StreamConfig.DEFAULT_VIDEO_FPS)
+            .takeIf { it in StreamConfig.FPS_OPTIONS } ?: StreamConfig.DEFAULT_VIDEO_FPS
+
     fun loadPortrait(prefs: SharedPreferences): Boolean =
         prefs.getBoolean(KEY_PORTRAIT, StreamConfig.DEFAULT_PORTRAIT)
 
@@ -64,13 +70,15 @@ object StreamPrefs {
         server: String,
         key: String,
         resIndex: Int,
-        bitrateKbps: Int
+        bitrateKbps: Int,
+        fps: Int
     ) {
         prefs.edit()
             .putString(KEY_SERVER, server)
             .putString(KEY_STREAM_KEY, key)
             .putInt(KEY_RES_INDEX, resIndex)
             .putInt(KEY_BITRATE_KBPS, bitrateKbps)
+            .putInt(KEY_FPS, fps)
             .remove(KEY_LEGACY_URL) // 旧形式は移行済みなので削除
             .apply()
     }

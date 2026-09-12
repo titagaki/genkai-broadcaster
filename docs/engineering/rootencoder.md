@@ -70,7 +70,7 @@ API名に迷ったら利用中のタグ `2.8.1` の実ソースで裏を取っ�
 - プロファイル: Constrained Baseline (`AVCProfileConstrainedBaseline`、minSdk 26 のため無条件可)
 - Level: `streamer/H264Level.kt` で解像度・FPS から自動選定 (MaxMBPS基準: 720p30→3.1、1080p30→4.0)
 - キーフレーム間隔: 2秒 (`iFrameInterval = 2`)
-- 音声: AAC-LC、FPS: 30固定
+- 音声: AAC-LC、FPS: 15/24/30/60 から選択 (既定 30、`StreamPrefs.loadFps`)
 
 ## 禁止事項 (製品方針)
 

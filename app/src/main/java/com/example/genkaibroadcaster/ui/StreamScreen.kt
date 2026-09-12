@@ -61,7 +61,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.example.genkaibroadcaster.streamer.CameraZoomChoice
 import com.example.genkaibroadcaster.streamer.CameraZoomState
 import com.example.genkaibroadcaster.streamer.RESOLUTIONS
-import com.example.genkaibroadcaster.streamer.StreamConfig
 import com.example.genkaibroadcaster.streamer.StreamController
 import com.example.genkaibroadcaster.streamer.StreamPrefs
 import com.example.genkaibroadcaster.system.BatteryMonitor
@@ -85,6 +84,7 @@ fun StreamScreen(
     var urlError by remember { mutableStateOf<String?>(null) }
     val status = urlError ?: streamState.cameraError ?: streamState.status
     val resolution = remember(prefs) { RESOLUTIONS[StreamPrefs.loadResIndex(prefs)] }
+    val fps = remember(prefs) { StreamPrefs.loadFps(prefs) }
     val dimensions = resolution.dimensions(portrait)
     val isFront = streamState.cameraIsFront
     var showCameraMenu by remember { mutableStateOf(false) }
@@ -111,6 +111,7 @@ fun StreamScreen(
             StreamInfo(
                 status = status,
                 dimensions = dimensions,
+                fps = fps,
                 stats = streamState.stats,
                 startedAtMs = streamState.startedAtMs,
                 modifier = Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 12.dp, end = 72.dp)
@@ -190,6 +191,7 @@ fun StreamScreen(
 private fun StreamInfo(
     status: String,
     dimensions: String,
+    fps: Int,
     stats: String,
     startedAtMs: Long?,
     modifier: Modifier = Modifier
@@ -232,7 +234,7 @@ private fun StreamInfo(
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         Text(
-            "$status / $dimensions / ${StreamConfig.VIDEO_FPS} fps",
+            "$status / $dimensions / $fps fps",
             color = Color.White,
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,

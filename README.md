@@ -24,9 +24,10 @@ Kotlin、Jetpack Compose、[RootEncoder](https://github.com/pedroSG94/RootEncode
 - 配信先: RTMPサーバーURL、ストリームキー
 - 配信先プリセット: PeerCast Gateway、自宅PeerCastStationの入力例
 - 映像方向: 縦 9:16、横 16:9
-- 解像度: 480p、720p、1080p
-- 映像ビットレート: 800～8000 kbps。配信中も変更可能
-- エンコード: H.264 Constrained Baseline、AAC-LC、30 fps
+- 解像度: 360p、480p、720p、1080p
+- フレームレート: 15、24、30、60 fps
+- 映像ビットレート: 100～10000 kbps。配信中も変更可能
+- エンコード: H.264 Constrained Baseline、AAC-LC、キーフレーム2秒
 
 入力した接続先、映像方向、解像度、ビットレートは端末内へ保存されます。
 

@@ -16,10 +16,11 @@ import com.example.genkaibroadcaster.streamer.StreamPrefs
 
 /**
  * 画面遷移の管理。配信画面⇔設定画面の2画面のみ。
+ * 設定画面内のカテゴリ階層 (メニュー⇔各ページ) は SettingsScreen が自前で持つ。
  *
  * Navigation-Compose を入れず自前のフラグ管理にしているのは、
- * 画面が2つだけでライブラリ追加のコストに見合わないため。
- * 3画面以上に増える場合は Navigation-Compose への移行を検討すること。
+ * トップレベルの画面が2つだけでライブラリ追加のコストに見合わないため。
+ * トップレベルが3画面以上に増える場合は Navigation-Compose への移行を検討すること。
  */
 @Composable
 fun AppRoot(
