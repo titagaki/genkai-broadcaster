@@ -73,7 +73,13 @@ API名に迷ったら利用中のタグ `2.8.1` の実ソースで裏を取っ�
 
 ## 本アプリの互換設定
 
-- プロファイル: Constrained Baseline (`AVCProfileConstrainedBaseline`、minSdk 26 のため無条件可)
+- プロファイル: Constrained Baseline を指定 (`AVCProfileConstrainedBaseline`、minSdk 26 のため無条件可)。
+  ただし `VideoEncoder` は `MediaFormat` の `"profile"` に set するだけで、HW エンコーダが
+  constraint_set1_flag を立てるかは端末次第 (実機で profile_idc=66・フラグ0 を確認済み)。
+  `MediaFormat` へ追加キーを渡す口は無い。`StreamBase.forceCodecType(SOFTWARE, ...)` で
+  AOSP ソフトウェアエンコーダに切り替えると Constrained Baseline になる
+  (本アプリの設定「エンコーダ: 互換」。`prepareVideo` の直前に呼ぶ。`prepareVideo` 内の
+  `chooseEncoder` が種別を見て選び直すので、prepare 済みでも呼び直せば次の prepare に効く)。
 - Level: `streamer/H264Level.kt` で解像度・FPS から自動選定 (MaxMBPS基準: 720p30→3.1、1080p30→4.0)
 - キーフレーム間隔: 2秒 (`iFrameInterval = 2`)
 - 音声: AAC-LC、FPS: 15/24/30/60 から選択 (既定 30、`StreamPrefs.loadFps`)

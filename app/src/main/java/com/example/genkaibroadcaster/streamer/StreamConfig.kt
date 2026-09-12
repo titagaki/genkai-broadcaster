@@ -28,6 +28,15 @@ object StreamConfig {
     /** キーフレーム間隔 (秒)。短めにして途中参加時の復帰を早くする */
     const val VIDEO_KEYFRAME_INTERVAL_SEC = 2
 
+    /**
+     * ソフトウェアエンコーダ (AOSP `c2.android.avc.encoder`) を使うか。
+     * HW エンコーダは [VIDEO_PROFILE] のヒントを無視して constraint_set1_flag を立てない
+     * (素の Baseline) ことがあり、その出力は DXVA2 経路のPCプレーヤーで再生できない。
+     * AOSP のソフトウェアエンコーダは Baseline 指定時に必ずフラグを立てる。
+     * 代償は CPU 負荷・電池消費だが、PeerCast 視聴側の互換を優先して既定は SW。
+     */
+    const val DEFAULT_SOFTWARE_ENCODER = true
+
     // ---- Audio ----
     const val AUDIO_SAMPLE_RATE = 32000
     const val AUDIO_STEREO = true
@@ -64,7 +73,8 @@ internal data class StreamPreparationConfig(
     val height: Int,
     val fps: Int,
     val videoBitrateBps: Int,
-    val rotation: Int
+    val rotation: Int,
+    val softwareEncoder: Boolean
 )
 
 data class Resolution(val label: String, val width: Int, val height: Int) {

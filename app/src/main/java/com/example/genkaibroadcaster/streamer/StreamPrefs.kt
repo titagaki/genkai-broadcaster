@@ -15,6 +15,7 @@ object StreamPrefs {
     private const val KEY_BITRATE_KBPS = "bitrate_kbps"
     private const val KEY_FPS = "video_fps"
     private const val KEY_PORTRAIT = "stream_portrait"
+    private const val KEY_SOFTWARE_ENCODER = "software_encoder"
 
     /** 旧版のキー。複数接続先 (destinations) へ移行後に削除される */
     private const val KEY_LEGACY_URL = "rtmp_url"
@@ -85,6 +86,13 @@ object StreamPrefs {
 
     fun savePortrait(prefs: SharedPreferences, portrait: Boolean) {
         prefs.edit().putBoolean(KEY_PORTRAIT, portrait).apply()
+    }
+
+    fun loadSoftwareEncoder(prefs: SharedPreferences): Boolean =
+        prefs.getBoolean(KEY_SOFTWARE_ENCODER, StreamConfig.DEFAULT_SOFTWARE_ENCODER)
+
+    fun saveSoftwareEncoder(prefs: SharedPreferences, software: Boolean) {
+        prefs.edit().putBoolean(KEY_SOFTWARE_ENCODER, software).apply()
     }
 
     fun saveVideo(prefs: SharedPreferences, resIndex: Int, bitrateKbps: Int, fps: Int) {

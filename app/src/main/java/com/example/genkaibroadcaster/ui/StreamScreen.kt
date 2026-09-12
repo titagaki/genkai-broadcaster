@@ -41,6 +41,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -68,6 +69,7 @@ import com.example.genkaibroadcaster.streamer.StreamController
 import com.example.genkaibroadcaster.streamer.StreamPrefs
 import com.example.genkaibroadcaster.streamer.StreamState
 import com.example.genkaibroadcaster.system.BatteryMonitor
+import com.example.genkaibroadcaster.system.MicrophoneMonitor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.Locale
@@ -346,6 +348,7 @@ private fun StreamInfo(
     }
 }
 
+/** 音量メーターと、その下に使用中 (推定) のマイク種別 */
 @Composable
 private fun LiveAudioMeter(
     controller: StreamController,
@@ -364,7 +367,25 @@ private fun LiveAudioMeter(
             delay(100)
         }
     }
-    AudioMeter(level = if (muted) 0f else meterLevel, modifier = modifier)
+    val appContext = LocalContext.current.applicationContext
+    var microphone by remember { mutableStateOf(MicrophoneMonitor.getInfo(appContext)) }
+    DisposableEffect(appContext) {
+        val callback = MicrophoneMonitor.register(appContext) {
+            microphone = MicrophoneMonitor.getInfo(appContext)
+        }
+        onDispose { MicrophoneMonitor.unregister(appContext, callback) }
+    }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        AudioMeter(level = if (muted) 0f else meterLevel)
+        Text(
+            microphone.label(),
+            color = Color(0xFFD4DDD7),
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 160.dp)
+        )
+    }
 }
 
 @Composable

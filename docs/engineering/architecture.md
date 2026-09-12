@@ -20,7 +20,7 @@ app/src/main/java/com/example/genkaibroadcaster/
 ├── MainActivity.kt      生成、権限要求、画面方向、Compose表示
 ├── StreamService.kt     Foreground Serviceと通知
 ├── streamer/            配信、カメラ、設定値、接続先モデル (StreamDestination)
-├── system/              電池などの端末情報
+├── system/              電池・マイクなどの端末情報 (BatteryMonitor, MicrophoneMonitor)
 └── ui/                  画面と表示部品
 ```
 

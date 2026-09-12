@@ -26,6 +26,7 @@ import com.pedro.encoder.input.sources.audio.MicrophoneSource
 import com.pedro.encoder.input.sources.video.Camera2Source
 import com.pedro.encoder.input.video.CameraCallbacks
 import com.pedro.encoder.input.video.CameraHelper
+import com.pedro.encoder.utils.CodecUtil
 import com.pedro.encoder.utils.gl.AspectRatioMode
 import com.pedro.library.base.StreamBase
 import com.pedro.library.generic.GenericStream
@@ -304,7 +305,8 @@ class StreamController private constructor(context: Context) {
                 StreamConfig.PORTRAIT_ROTATION
             } else {
                 StreamConfig.LANDSCAPE_ROTATION
-            }
+            },
+            softwareEncoder = StreamPrefs.loadSoftwareEncoder(prefs)
         )
         createStream()
         if (preparedConfig == config) return true
@@ -313,6 +315,12 @@ class StreamController private constructor(context: Context) {
         mutableState.value = state.value.copy(previewReady = false)
         preparedConfig = null
         val ok = runCatching {
+            // prepareVideo 内でエンコーダを選び直すので、その前に種別を指定する
+            genericStream?.forceCodecType(
+                if (config.softwareEncoder) CodecUtil.CodecType.SOFTWARE
+                else CodecUtil.CodecType.FIRST_COMPATIBLE_FOUND,
+                CodecUtil.CodecType.FIRST_COMPATIBLE_FOUND
+            )
             genericStream?.prepareVideo(
                 config.width, config.height, config.videoBitrateBps,
                 fps = config.fps,

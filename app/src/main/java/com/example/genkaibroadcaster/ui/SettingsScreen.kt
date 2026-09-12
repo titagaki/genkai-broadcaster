@@ -93,7 +93,7 @@ private enum class SettingsPage(val title: String, val subtitle: String, val ico
     STREAM("配信", "RTMPサーバーとストリームキー", Icons.Filled.CloudUpload),
     VIDEO("映像", "送信する映像の向きと画質", Icons.Filled.Videocam),
     CAMERA("カメラ", "ズーム方式の診断 (デバッグビルド専用)", Icons.Filled.CameraAlt),
-    SETUP("権限と接続", "権限の確認と受け側の準備", Icons.Filled.VerifiedUser)
+    SETUP("権限", "カメラ・マイク・通知の権限を確認", Icons.Filled.VerifiedUser)
 }
 
 /**
@@ -129,6 +129,7 @@ fun SettingsScreen(
     var resolutionIndex by remember { mutableIntStateOf(StreamPrefs.loadResIndex(prefs)) }
     var bitrateKbps by remember { mutableIntStateOf(StreamPrefs.loadBitrateKbps(prefs)) }
     var fps by remember { mutableIntStateOf(StreamPrefs.loadFps(prefs)) }
+    var softwareEncoder by remember { mutableStateOf(StreamPrefs.loadSoftwareEncoder(prefs)) }
     var showKey by remember { mutableStateOf(false) }
     val streamState by controller.state.collectAsState()
     val isStreaming = streamState.isStreaming
@@ -208,7 +209,8 @@ fun SettingsScreen(
                                         if (portrait) "縦" else "横",
                                         RESOLUTIONS[resolutionIndex].label,
                                         "$fps fps",
-                                        "$bitrateKbps kbps"
+                                        "$bitrateKbps kbps",
+                                        if (softwareEncoder) "互換" else "標準"
                                     ).joinToString(" / ")
                                     else -> target.subtitle
                                 }
@@ -245,10 +247,15 @@ fun SettingsScreen(
                         }
                         SettingsPage.VIDEO -> VideoPage(
                             portrait = portrait, resolutionIndex = resolutionIndex, fps = fps, bitrateKbps = bitrateKbps,
+                            softwareEncoder = softwareEncoder,
                             isStreaming = isStreaming,
                             onPortraitChanged = onPortraitChanged,
                             onResolutionChange = { resolutionIndex = it; persistVideo() },
                             onFpsChange = { fps = it; persistVideo() },
+                            onSoftwareEncoderChange = {
+                                softwareEncoder = it
+                                StreamPrefs.saveSoftwareEncoder(prefs, it)
+                            },
                             onBitrateChange = {
                                 bitrateKbps = it
                                 if (isStreaming) controller.setVideoBitrateKbpsOnFly(bitrateKbps)
@@ -430,10 +437,12 @@ private fun VideoPage(
     resolutionIndex: Int,
     fps: Int,
     bitrateKbps: Int,
+    softwareEncoder: Boolean,
     isStreaming: Boolean,
     onPortraitChanged: (Boolean) -> Unit,
     onResolutionChange: (Int) -> Unit,
     onFpsChange: (Int) -> Unit,
+    onSoftwareEncoderChange: (Boolean) -> Unit,
     onBitrateChange: (Int) -> Unit
 ) {
     SettingsSection("向きと解像度", "配信停止中のみ変更できます") {
@@ -451,6 +460,17 @@ private fun VideoPage(
         BitrateStepper(bitrateKbps, onBitrateChange)
         Text("H.264 + AAC / キーフレーム ${StreamConfig.VIDEO_KEYFRAME_INTERVAL_SEC}秒",
             style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    SettingsSection("エンコーダ", "配信停止中のみ変更できます") {
+        EncoderSelector(softwareEncoder, !isStreaming, onSoftwareEncoderChange)
+        Text(
+            if (softwareEncoder) {
+                "CPU でエンコードします。古いPCプレーヤー (DXVA2 有効) でも再生できます。電池を多く使うため、高解像度・高フレームレートで重い場合は「標準」を試してください。"
+            } else {
+                "端末のハードウェアでエンコードします。省電力ですが、古いPCプレーヤー (DXVA2 有効) で再生できないことがあります。"
+            },
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -501,17 +521,31 @@ private fun SetupPage(onRequestPermissions: () -> Unit) {
         Text("通知の許可は任意です。",
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    SettingsSection("接続の準備", "配信前に受け側も準備してください") {
-        Text("PeerCast Gateway", fontWeight = FontWeight.SemiBold)
-        Text("FLVチャンネルを作成し、発行されたURLと4桁キーを入力します。",
-            style = MaterialTheme.typography.bodySmall)
-        Text("Twitch", fontWeight = FontWeight.SemiBold)
-        Text("クリエイターダッシュボード → 設定 → 配信 のプライマリストリームキーを入力します。",
-            style = MaterialTheme.typography.bodySmall)
-    }
 }
 
 // ---- 部品 ----
+
+/** ズーム方式 (CameraPage) と同じ縦並びのラジオ選択 */
+@Composable
+private fun EncoderSelector(software: Boolean, enabled: Boolean, onSelect: (Boolean) -> Unit) {
+    val options = listOf(true to "互換 (ソフトウェア)", false to "標準 (ハードウェア)")
+    Column(
+        modifier = Modifier.fillMaxWidth().selectableGroup(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        options.forEach { (value, label) ->
+            val selected = value == software
+            OutlinedButton(
+                onClick = { onSelect(value) },
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth().semantics { this.selected = selected }
+            ) {
+                RadioButton(selected = selected, onClick = null, enabled = enabled)
+                Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+            }
+        }
+    }
+}
 
 @Composable
 private fun FpsSelector(selected: Int, enabled: Boolean, onSelect: (Int) -> Unit) {
