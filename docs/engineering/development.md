@@ -31,6 +31,26 @@ KGP と AGP の組み合わせを変える場合は、公式互換表
 2. Gradle Sync
 3. Build → Clean Project → Rebuild Project (実機で実行)
 
+## リリースビルド (署名)
+
+- 署名情報はリポジトリルートの `keystore.properties` (git 管理外) から `app/build.gradle.kts` が読む。
+  雛形は `keystore.properties.example`。ファイルが無ければ release は未署名でビルドされる。
+- 鍵ファイル (`*.jks`) はリポジトリ外 (例: `C:/Users/<name>/keys/`) に置き、`storeFile` に絶対パスを書く。
+  `*.jks` `*.keystore` `keystore.properties` は `.gitignore` 済み。
+- **鍵を失うと同じ applicationId で更新版を配布できなくなる** (利用者は再インストールが必要)。鍵とパスワードは必ずバックアップする。
+
+### 鍵の作成 (初回のみ、Android Studio)
+
+1. Build → Generate Signed Bundle / APK… → APK → Next
+2. Key store path の「Create new…」で保存先 (リポジトリ外)・パスワード・エイリアス・有効期限 (25年以上) を入力
+3. 作成した値を `keystore.properties` に書く
+
+### リリース APK の作成
+
+- Build → Generate Signed Bundle / APK… → APK → release、または Build Variants を release にして Build → Build APK(s)
+- 出力: `app/build/outputs/apk/release/app-release.apk`
+- 配布は GitHub Releases にタグ (`vX.Y.Z`) を切って APK を添付する
+
 ## アプリアイコン
 
 - `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` の adaptive icon (background 色 + foreground + monochrome)。

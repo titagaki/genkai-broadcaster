@@ -15,3 +15,11 @@ local.properties
 # OS
 .DS_Store
 Thumbs.db
+
+# Release signing (never commit)
+keystore.properties
+*.jks
+*.keystore
+
+# Generate Signed APK wizard output
+app/release/
