@@ -1,14 +1,11 @@
 package io.github.titagaki.genkaibroadcaster.ui
 
-import android.content.SharedPreferences
 import android.os.SystemClock
 import android.view.SurfaceView
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,6 +21,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -64,7 +63,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import io.github.titagaki.genkaibroadcaster.streamer.CameraZoomChoice
 import io.github.titagaki.genkaibroadcaster.streamer.CameraZoomState
-import io.github.titagaki.genkaibroadcaster.streamer.RESOLUTIONS
 import io.github.titagaki.genkaibroadcaster.streamer.StreamController
 import io.github.titagaki.genkaibroadcaster.streamer.StreamPrefs
 import io.github.titagaki.genkaibroadcaster.streamer.StreamState
@@ -84,7 +82,7 @@ import kotlin.math.roundToInt
 @Composable
 fun StreamScreen(
     controller: StreamController,
-    prefs: SharedPreferences,
+    prefs: StreamPrefs,
     portrait: Boolean,
     onOpenSettings: () -> Unit,
     onRequestPermissions: () -> Unit
@@ -92,8 +90,9 @@ fun StreamScreen(
     val streamState by controller.state.collectAsState()
     var urlError by remember { mutableStateOf<String?>(null) }
     val status = urlError ?: streamState.cameraError ?: streamState.status
-    val resolution = remember(prefs) { RESOLUTIONS[StreamPrefs.loadResIndex(prefs)] }
-    val fps = remember(prefs) { StreamPrefs.loadFps(prefs) }
+    // 設定画面から戻ると StreamScreen は作り直されるので、初回コンポーズ時の値で足りる
+    val resolution = remember { prefs.loadResolution() }
+    val fps = remember { prefs.loadFps() }
     val dimensions = resolution.dimensions(portrait)
     val isFront = streamState.cameraIsFront
     var showCameraMenu by remember { mutableStateOf(false) }
@@ -103,7 +102,7 @@ fun StreamScreen(
         if (controller.isStreamingNow()) {
             controller.stopStream()
         } else {
-            val url = StreamPrefs.buildFullUrl(prefs)
+            val url = prefs.buildFullUrl()
             if (StreamPrefs.isAcceptedRtmpUrl(url)) controller.startStream(url)
             else urlError = "配信先URLが不正です"
         }
@@ -145,7 +144,7 @@ fun StreamScreen(
                         icon = if (streamState.isStreaming) Icons.Filled.Stop else Icons.Filled.PlayArrow,
                         contentDescription = if (streamState.isStreaming) "配信を停止" else "配信を開始",
                         label = if (streamState.isStreaming) "配信停止" else "配信開始",
-                        containerColor = if (streamState.isStreaming) STOP_COLOR else START_COLOR,
+                        containerColor = if (streamState.isStreaming) OverlayColors.stop else OverlayColors.start,
                         enabled = streamState.isStreaming || streamState.previewReady,
                         compact = compactControls,
                         onClick = startOrStop
@@ -179,9 +178,6 @@ fun StreamScreen(
         }
     }
 }
-
-private val START_COLOR = Color(0xFF2E7D4F)
-private val STOP_COLOR = Color(0xFFB43832)
 
 /** カメラプレビューと、その上に重ねる情報・設定ボタン・音量メーター。操作帯は含めない。 */
 @Composable
@@ -260,8 +256,8 @@ private fun ControlBand(
 ) {
     Surface(
         shape = CircleShape,
-        color = Color(0xF0181E1B),
-        border = BorderStroke(1.dp, Color(0x59FFFFFF)),
+        color = OverlayColors.band,
+        border = BorderStroke(1.dp, OverlayColors.bandBorder),
         modifier = modifier
     ) {
         val slot: @Composable (Modifier, @Composable () -> Unit) -> Unit = { slotModifier, content ->
@@ -325,7 +321,7 @@ private fun StreamInfo(
     }.joinToString(" / ")
     Column(
         modifier = modifier.widthIn(max = 320.dp)
-            .background(Color(0x99101413), RoundedCornerShape(6.dp))
+            .background(OverlayColors.scrim, RoundedCornerShape(6.dp))
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
@@ -339,7 +335,7 @@ private fun StreamInfo(
         if (details.isNotEmpty()) {
             Text(
                 details,
-                color = Color(0xFFD4DDD7),
+                color = OverlayColors.secondaryText,
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -379,7 +375,7 @@ private fun LiveAudioMeter(
         AudioMeter(level = if (muted) 0f else meterLevel)
         Text(
             microphone.label(),
-            color = Color(0xFFD4DDD7),
+            color = OverlayColors.secondaryText,
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -407,10 +403,10 @@ private fun OverlayIconButton(
             shape = CircleShape,
             contentPadding = PaddingValues(0.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = containerColor ?: if (active) Color(0xFFD1433E) else Color(0xAA101413),
+                containerColor = containerColor ?: if (active) OverlayColors.buttonActive else OverlayColors.button,
                 contentColor = Color.White,
-                disabledContainerColor = Color(0x66101413),
-                disabledContentColor = Color(0x88FFFFFF)
+                disabledContainerColor = OverlayColors.buttonDisabled,
+                disabledContentColor = OverlayColors.contentDisabled
             ),
             modifier = Modifier.size(if (compact) 44.dp else 52.dp)
         ) {
@@ -423,7 +419,7 @@ private fun OverlayIconButton(
                 style = MaterialTheme.typography.labelSmall,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 3.dp)
-                    .background(Color(0x99101413), RoundedCornerShape(4.dp))
+                    .background(OverlayColors.scrim, RoundedCornerShape(4.dp))
                     .padding(horizontal = 5.dp, vertical = 1.dp)
             )
         }
@@ -438,7 +434,7 @@ private fun PreviewUnavailable(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.background(Color(0xDD101413), RoundedCornerShape(12.dp)).padding(16.dp),
+        modifier = modifier.background(OverlayColors.panel, RoundedCornerShape(12.dp)).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -468,10 +464,10 @@ private fun CameraZoomSelector(
             shape = RoundedCornerShape(20.dp),
             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xCC2B2927),
+                containerColor = OverlayColors.selector,
                 contentColor = Color.White,
-                disabledContainerColor = Color(0x662B2927),
-                disabledContentColor = Color(0x88FFFFFF)
+                disabledContainerColor = OverlayColors.selectorDisabled,
+                disabledContentColor = OverlayColors.contentDisabled
             )
         ) {
             Text(

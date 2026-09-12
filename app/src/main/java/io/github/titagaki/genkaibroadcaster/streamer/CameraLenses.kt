@@ -40,7 +40,6 @@ data class LensOption(
 object CameraLenses {
 
     fun list(context: Context): List<LensOption> {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return emptyList()
         val manager = context.getSystemService(Context.CAMERA_SERVICE) as? CameraManager
             ?: return emptyList()
         val all = runCatching {
