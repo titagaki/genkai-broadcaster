@@ -24,12 +24,12 @@ Android RTMP配信アプリ (Kotlin + Compose + RootEncoder)。PeerCastでの利
 
 ```
 MainActivity (生成・権限・表示のみ、ロジック禁止)
-streamer/ : StreamController / StreamConfig (定数) / StreamPrefs (設定キー)
+streamer/ : StreamController / StreamConfig (定数) / StreamPrefs (設定キー) / StreamDestination (接続先モデル)
 system/   : 端末情報 (BatteryMonitor等)
 ui/       : AppRoot / StreamScreen / SettingsScreen / components
 ```
 
-- UI層 → streamer層は `StreamController`/`StreamPrefs`/`StreamConfig` 経由のみ。
+- UI層 → streamer層は `StreamController`/`StreamPrefs`/`StreamConfig`/`StreamDestination` 経由のみ。
 - 定数は `StreamConfig` に、設定キー文字列は `StreamPrefs` に集約。
 
 ## ドキュメント
