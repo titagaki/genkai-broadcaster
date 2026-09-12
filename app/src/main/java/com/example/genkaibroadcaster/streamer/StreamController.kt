@@ -20,6 +20,8 @@ import com.pedro.common.StreamingStatsReport
 import com.pedro.common.Throughput
 import com.pedro.common.VideoCodec
 import com.pedro.common.onMainThreadHandler
+import com.pedro.encoder.Frame
+import com.pedro.encoder.input.audio.GetMicrophoneData
 import com.pedro.encoder.input.sources.audio.MicrophoneSource
 import com.pedro.encoder.input.sources.video.Camera2Source
 import com.pedro.encoder.input.video.CameraCallbacks
@@ -123,6 +125,15 @@ class StreamController private constructor(context: Context) {
     /** マイク入力レベル観測用 (音声は加工せず素通し) */
     private val levelEffect = LevelMeterEffect()
 
+    /**
+     * 配信前の音量メーター用にマイクだけ回すときの受け口。PCM は捨てる。
+     * 配信開始時は StreamBase が自分の受け口へ差し替える (MicrophoneSource.start は
+     * 稼働中でもコールバックを更新してから return する)。
+     */
+    private val monitorSink = object : GetMicrophoneData {
+        override fun inputPCMData(frame: Frame) = Unit
+    }
+
     private fun createStream() {
         if (genericStream != null) return
         val currentGeneration = ++generation
@@ -186,6 +197,7 @@ class StreamController private constructor(context: Context) {
         genericStream = null
         preparedConfig = null
         mutableState.value = state.value.copy(previewReady = false)
+        stopMicMonitor(stream)
         stream.release()
     }
 
@@ -232,6 +244,7 @@ class StreamController private constructor(context: Context) {
 
     private fun stopPreviewAndReleaseIfIdle() {
         mutableState.value = state.value.copy(previewReady = false)
+        stopMicMonitor()
         if (genericStream?.isOnPreview == true) genericStream?.stopPreview()
         if (!isStreamingNow()) releaseEngine()
     }
@@ -258,6 +271,7 @@ class StreamController private constructor(context: Context) {
                 pendingLens = savedLens ?: if (savedFront) null else defaultBackLens()
             }
             genericStream?.startPreview(previewSurface)
+            startMicMonitor()
             // 配信中のSurface再接続ではカメラを開き直さない。
             if (!wasRunning) {
                 mutableState.value = state.value.copy(previewReady = false, cameraError = null)
@@ -294,6 +308,7 @@ class StreamController private constructor(context: Context) {
         )
         createStream()
         if (preparedConfig == config) return true
+        stopMicMonitor()
         if (genericStream?.isOnPreview == true) genericStream?.stopPreview()
         mutableState.value = state.value.copy(previewReady = false)
         preparedConfig = null
@@ -731,6 +746,24 @@ class StreamController private constructor(context: Context) {
             if (muted) mic.mute() else mic.unMute()
             mutableState.value = state.value.copy(muted = muted)
         }
+    }
+
+    /**
+     * 配信前でも音量メーターが動くよう、プレビュー中はマイクだけ起動しておく。
+     * prepareAudio 済み (preparedConfig != null) が前提。配信中は StreamBase が管理するので触らない。
+     */
+    private fun startMicMonitor() {
+        if (isStreamingNow() || preparedConfig == null) return
+        val mic = genericStream?.audioSource as? MicrophoneSource ?: return
+        if (mic.isRunning()) return
+        runCatching { mic.start(monitorSink) }
+    }
+
+    /** 配信中は StreamBase 側の stopSources が止めるので、自前で回している時だけ止める */
+    private fun stopMicMonitor(stream: StreamBase? = genericStream) {
+        if (isStreamingNow()) return
+        val mic = stream?.audioSource as? MicrophoneSource ?: return
+        if (mic.isRunning()) runCatching { mic.stop() }
     }
 
     /**

@@ -63,7 +63,13 @@ API名に迷ったら利用中のタグ `2.8.1` の実ソースで裏を取っ�
   ID指定時も `switchCamera()` で前後を合わせ、同一IDの不要な再オープンは避ける。
 - 音量観測: `setAudioEffect(object : CustomAudioEffect() { override fun process(p: ByteArray) = p })`。
   加工せず素通しし、PCMピークだけ記録する。本アプリは `streamer/LevelMeterEffect.kt`。
-  (ミュート時も `process` は生データで呼ばれるため、ControllerとUIでミュート時 0 扱いにする)
+  2.8.1 の `MicrophoneManager` はミュート中 `process` を呼ばず無音バッファを渡すため、
+  ピーク値が最後の値のまま残る。ControllerとUIでミュート時は 0 扱いにする。
+- 配信前のマイク起動: `MicrophoneSource.start(GetMicrophoneData)` は `prepareAudio` 後なら単独で呼べる。
+  稼働中に再度 `start` されるとコールバックだけ差し替えて return するので、配信開始時に
+  `StreamBase.startSources()` がそのままエンコーダへ繋ぎ替える。`stopStream` → `stopSources()` で止まる。
+  `MicrophoneSource.release()` は no-op なので、エンジン解放前に自前で `stop()` すること
+  (本アプリは `StreamController.startMicMonitor / stopMicMonitor`)。
 
 ## 本アプリの互換設定
 

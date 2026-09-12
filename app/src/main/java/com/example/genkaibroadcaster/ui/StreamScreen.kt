@@ -3,6 +3,7 @@ package com.example.genkaibroadcaster.ui
 import android.content.SharedPreferences
 import android.os.SystemClock
 import android.view.SurfaceView
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -14,7 +15,9 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -63,6 +66,7 @@ import com.example.genkaibroadcaster.streamer.CameraZoomState
 import com.example.genkaibroadcaster.streamer.RESOLUTIONS
 import com.example.genkaibroadcaster.streamer.StreamController
 import com.example.genkaibroadcaster.streamer.StreamPrefs
+import com.example.genkaibroadcaster.streamer.StreamState
 import com.example.genkaibroadcaster.system.BatteryMonitor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -71,7 +75,10 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-/** 全面カメラプレビューへ配信情報と操作を重ねる配信画面。 */
+/**
+ * 配信画面。カメラプレビュー領域と操作帯 (スタジアム形) を分け、重ねない。
+ * 縦配信では帯を下に、横配信では帯を右に置く。情報表示・設定・音量メーターはプレビュー上に重ねる。
+ */
 @Composable
 fun StreamScreen(
     controller: StreamController,
@@ -89,7 +96,97 @@ fun StreamScreen(
     val isFront = streamState.cameraIsFront
     var showCameraMenu by remember { mutableStateOf(false) }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    val startOrStop: () -> Unit = {
+        urlError = null
+        if (controller.isStreamingNow()) {
+            controller.stopStream()
+        } else {
+            val url = StreamPrefs.buildFullUrl(prefs)
+            if (StreamPrefs.isAcceptedRtmpUrl(url)) controller.startStream(url)
+            else urlError = "配信先URLが不正です"
+        }
+    }
+
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding()) {
+        val compactControls = maxHeight < 400.dp
+        val preview: @Composable (Modifier) -> Unit = { modifier ->
+            PreviewArea(
+                controller = controller,
+                streamState = streamState,
+                status = status,
+                dimensions = dimensions,
+                fps = fps,
+                compact = compactControls,
+                onOpenSettings = onOpenSettings,
+                onRequestPermissions = onRequestPermissions,
+                modifier = modifier
+            )
+        }
+        val controls: @Composable (Boolean, Modifier) -> Unit = { vertical, modifier ->
+            ControlBand(vertical = vertical, modifier = modifier) {
+                CameraZoomSelector(
+                    isFront = isFront,
+                    zoom = streamState.zoom,
+                    choices = controller.cameraZoomChoices(isFront),
+                    expanded = showCameraMenu,
+                    enabled = streamState.previewReady || streamState.cameraError != null,
+                    onExpandedChange = { showCameraMenu = it },
+                    onSelectFacing = { controller.selectCamera(it) },
+                    onSelectZoom = controller::selectCameraZoom
+                )
+                OverlayIconButton(
+                    icon = if (streamState.isStreaming) Icons.Filled.Stop else Icons.Filled.PlayArrow,
+                    contentDescription = if (streamState.isStreaming) "配信を停止" else "配信を開始",
+                    label = if (streamState.isStreaming) "配信停止" else "配信開始",
+                    containerColor = if (streamState.isStreaming) STOP_COLOR else START_COLOR,
+                    enabled = streamState.isStreaming || streamState.previewReady,
+                    compact = compactControls,
+                    onClick = startOrStop
+                )
+                OverlayIconButton(
+                    icon = if (streamState.muted) Icons.Filled.MicOff else Icons.Filled.Mic,
+                    contentDescription = if (streamState.muted) "マイクをON" else "マイクをOFF",
+                    label = if (streamState.muted) "OFF" else "ON",
+                    active = streamState.muted,
+                    enabled = streamState.previewReady || streamState.isStreaming,
+                    compact = compactControls,
+                    onClick = { controller.toggleMute(!streamState.muted) }
+                )
+            }
+        }
+        // 端末の向きは配信方向に固定しているので、縦配信=縦持ち、横配信=横持ち。
+        // 縦は下に横長の帯、横は右に縦長の帯を置き、プレビューとは重ねない。
+        if (portrait) {
+            Column(Modifier.fillMaxSize()) {
+                preview(Modifier.weight(1f).fillMaxWidth())
+                controls(false, Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp))
+            }
+        } else {
+            Row(Modifier.fillMaxSize()) {
+                preview(Modifier.weight(1f).fillMaxHeight())
+                controls(true, Modifier.fillMaxHeight().padding(horizontal = 10.dp, vertical = 12.dp))
+            }
+        }
+    }
+}
+
+private val START_COLOR = Color(0xFF2E7D4F)
+private val STOP_COLOR = Color(0xFFB43832)
+
+/** カメラプレビューと、その上に重ねる情報・設定ボタン・音量メーター。操作帯は含めない。 */
+@Composable
+private fun PreviewArea(
+    controller: StreamController,
+    streamState: StreamState,
+    status: String,
+    dimensions: String,
+    fps: Int,
+    compact: Boolean,
+    onOpenSettings: () -> Unit,
+    onRequestPermissions: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier) {
         AndroidView(
             factory = { context -> SurfaceView(context).also { controller.attachSurface(it) } },
             onRelease = { controller.detachSurface(it) },
@@ -105,76 +202,26 @@ fun StreamScreen(
                 }
             }
         ) {}
-
-        BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
-            val compactControls = maxHeight < 400.dp
-            StreamInfo(
-                status = status,
-                dimensions = dimensions,
-                fps = fps,
-                stats = streamState.stats,
-                startedAtMs = streamState.startedAtMs,
-                modifier = Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 12.dp, end = 72.dp)
-            )
-
-            OverlayIconButton(
-                icon = Icons.Filled.Settings,
-                contentDescription = "配信設定",
-                onClick = onOpenSettings,
-                compact = compactControls,
-                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
-            )
-
-            LiveAudioMeter(
-                controller = controller,
-                muted = streamState.muted,
-                modifier = Modifier.align(Alignment.CenterStart).padding(start = 12.dp)
-            )
-
-            OverlayIconButton(
-                icon = if (streamState.muted) Icons.Filled.MicOff else Icons.Filled.Mic,
-                contentDescription = if (streamState.muted) "マイクをON" else "マイクをOFF",
-                label = if (streamState.muted) "OFF" else "ON",
-                active = streamState.muted,
-                enabled = streamState.previewReady || streamState.isStreaming,
-                compact = compactControls,
-                onClick = { controller.toggleMute(!streamState.muted) },
-                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 12.dp)
-            )
-
-            Column(
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(if (compactControls) 8.dp else 12.dp)
-            ) {
-                CameraZoomSelector(
-                    isFront = isFront,
-                    zoom = streamState.zoom,
-                    choices = controller.cameraZoomChoices(isFront),
-                    expanded = showCameraMenu,
-                    enabled = streamState.previewReady || streamState.cameraError != null,
-                    onExpandedChange = { showCameraMenu = it },
-                    onSelectFacing = { controller.selectCamera(it) },
-                    onSelectZoom = controller::selectCameraZoom
-                )
-                StreamButton(
-                    isStreaming = streamState.isStreaming,
-                    enabled = streamState.isStreaming || streamState.previewReady,
-                    compact = compactControls,
-                    onClick = {
-                        urlError = null
-                        if (controller.isStreamingNow()) {
-                            controller.stopStream()
-                        } else {
-                            val url = StreamPrefs.buildFullUrl(prefs)
-                            if (StreamPrefs.isAcceptedRtmpUrl(url)) controller.startStream(url)
-                            else urlError = "配信先URLが不正です"
-                        }
-                    }
-                )
-            }
-        }
-
+        StreamInfo(
+            status = status,
+            dimensions = dimensions,
+            fps = fps,
+            stats = streamState.stats,
+            startedAtMs = streamState.startedAtMs,
+            modifier = Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 12.dp, end = 72.dp)
+        )
+        OverlayIconButton(
+            icon = Icons.Filled.Settings,
+            contentDescription = "配信設定",
+            onClick = onOpenSettings,
+            compact = compact,
+            modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
+        )
+        LiveAudioMeter(
+            controller = controller,
+            muted = streamState.muted,
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 12.dp)
+        )
         if (!streamState.previewReady) {
             PreviewUnavailable(
                 hasPermissions = controller.hasPermissions(),
@@ -184,7 +231,38 @@ fun StreamScreen(
             )
         }
     }
+}
 
+/**
+ * 操作をまとめる帯。陸上トラックのように平行線と半円で閉じた形 (スタジアム形) にする。
+ * [CircleShape] は矩形に対しては短辺の半分を角半径にするので、そのままスタジアム形になる。
+ */
+@Composable
+private fun ControlBand(
+    vertical: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Surface(
+        shape = CircleShape,
+        color = Color(0xF0181E1B),
+        border = BorderStroke(1.dp, Color(0x59FFFFFF)),
+        modifier = modifier
+    ) {
+        if (vertical) {
+            Column(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 28.dp),
+                verticalArrangement = Arrangement.SpaceEvenly,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) { content() }
+        } else {
+            Row(
+                modifier = Modifier.padding(horizontal = 28.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) { content() }
+        }
+    }
 }
 
 @Composable
@@ -281,6 +359,7 @@ private fun OverlayIconButton(
     modifier: Modifier = Modifier,
     label: String? = null,
     active: Boolean = false,
+    containerColor: Color? = null,
     enabled: Boolean = true,
     compact: Boolean = false
 ) {
@@ -291,7 +370,7 @@ private fun OverlayIconButton(
             shape = CircleShape,
             contentPadding = PaddingValues(0.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (active) Color(0xFFD1433E) else Color(0xAA101413),
+                containerColor = containerColor ?: if (active) Color(0xFFD1433E) else Color(0xAA101413),
                 contentColor = Color.White,
                 disabledContainerColor = Color(0x66101413),
                 disabledContentColor = Color(0x88FFFFFF)
@@ -309,46 +388,6 @@ private fun OverlayIconButton(
                 modifier = Modifier.padding(top = 3.dp)
                     .background(Color(0x99101413), RoundedCornerShape(4.dp))
                     .padding(horizontal = 5.dp, vertical = 1.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun StreamButton(
-    isStreaming: Boolean,
-    enabled: Boolean,
-    compact: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Button(
-            onClick = onClick,
-            enabled = enabled,
-            shape = CircleShape,
-            contentPadding = PaddingValues(0.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (isStreaming) Color(0xFFB43832) else Color(0xFF2E7D4F),
-                contentColor = Color.White
-            ),
-            modifier = Modifier.size(if (compact) 68.dp else 82.dp)
-        ) {
-            Icon(
-                if (isStreaming) Icons.Filled.Stop else Icons.Filled.PlayArrow,
-                contentDescription = if (isStreaming) "配信を停止" else "配信を開始",
-                modifier = Modifier.size(if (compact) 32.dp else 38.dp)
-            )
-        }
-        if (!compact) {
-            Text(
-                if (isStreaming) "配信停止" else "配信開始",
-                color = Color.White,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 5.dp)
-                    .background(Color(0x99101413), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 7.dp, vertical = 2.dp)
             )
         }
     }
