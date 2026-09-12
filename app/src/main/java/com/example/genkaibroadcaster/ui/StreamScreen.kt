@@ -123,36 +123,44 @@ fun StreamScreen(
             )
         }
         val controls: @Composable (Boolean, Modifier) -> Unit = { vertical, modifier ->
-            ControlBand(vertical = vertical, modifier = modifier) {
-                CameraZoomSelector(
-                    isFront = isFront,
-                    zoom = streamState.zoom,
-                    choices = controller.cameraZoomChoices(isFront),
-                    expanded = showCameraMenu,
-                    enabled = streamState.previewReady || streamState.cameraError != null,
-                    onExpandedChange = { showCameraMenu = it },
-                    onSelectFacing = { controller.selectCamera(it) },
-                    onSelectZoom = controller::selectCameraZoom
-                )
-                OverlayIconButton(
-                    icon = if (streamState.isStreaming) Icons.Filled.Stop else Icons.Filled.PlayArrow,
-                    contentDescription = if (streamState.isStreaming) "配信を停止" else "配信を開始",
-                    label = if (streamState.isStreaming) "配信停止" else "配信開始",
-                    containerColor = if (streamState.isStreaming) STOP_COLOR else START_COLOR,
-                    enabled = streamState.isStreaming || streamState.previewReady,
-                    compact = compactControls,
-                    onClick = startOrStop
-                )
-                OverlayIconButton(
-                    icon = if (streamState.muted) Icons.Filled.MicOff else Icons.Filled.Mic,
-                    contentDescription = if (streamState.muted) "マイクをON" else "マイクをOFF",
-                    label = if (streamState.muted) "OFF" else "ON",
-                    active = streamState.muted,
-                    enabled = streamState.previewReady || streamState.isStreaming,
-                    compact = compactControls,
-                    onClick = { controller.toggleMute(!streamState.muted) }
-                )
-            }
+            ControlBand(
+                vertical = vertical,
+                modifier = modifier,
+                leading = {
+                    CameraZoomSelector(
+                        isFront = isFront,
+                        zoom = streamState.zoom,
+                        choices = controller.cameraZoomChoices(isFront),
+                        expanded = showCameraMenu,
+                        enabled = streamState.previewReady || streamState.cameraError != null,
+                        onExpandedChange = { showCameraMenu = it },
+                        onSelectFacing = { controller.selectCamera(it) },
+                        onSelectZoom = controller::selectCameraZoom
+                    )
+                },
+                center = {
+                    OverlayIconButton(
+                        icon = if (streamState.isStreaming) Icons.Filled.Stop else Icons.Filled.PlayArrow,
+                        contentDescription = if (streamState.isStreaming) "配信を停止" else "配信を開始",
+                        label = if (streamState.isStreaming) "配信停止" else "配信開始",
+                        containerColor = if (streamState.isStreaming) STOP_COLOR else START_COLOR,
+                        enabled = streamState.isStreaming || streamState.previewReady,
+                        compact = compactControls,
+                        onClick = startOrStop
+                    )
+                },
+                trailing = {
+                    OverlayIconButton(
+                        icon = if (streamState.muted) Icons.Filled.MicOff else Icons.Filled.Mic,
+                        contentDescription = if (streamState.muted) "マイクをON" else "マイクをOFF",
+                        label = if (streamState.muted) "OFF" else "ON",
+                        active = streamState.muted,
+                        enabled = streamState.previewReady || streamState.isStreaming,
+                        compact = compactControls,
+                        onClick = { controller.toggleMute(!streamState.muted) }
+                    )
+                }
+            )
         }
         // 端末の向きは配信方向に固定しているので、縦配信=縦持ち、横配信=横持ち。
         // 縦は下に横長の帯、横は右に縦長の帯を置き、プレビューとは重ねない。
@@ -236,12 +244,17 @@ private fun PreviewArea(
 /**
  * 操作をまとめる帯。陸上トラックのように平行線と半円で閉じた形 (スタジアム形) にする。
  * [CircleShape] は矩形に対しては短辺の半分を角半径にするので、そのままスタジアム形になる。
+ *
+ * 3つのスロットを等幅 (縦帯では等高) にし、[center] が帯の中心に来るようにする。
+ * SpaceEvenly だとピル型セレクターの幅に引きずられて中央の配信ボタンがずれるため。
  */
 @Composable
 private fun ControlBand(
     vertical: Boolean,
     modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
+    leading: @Composable () -> Unit,
+    center: @Composable () -> Unit,
+    trailing: @Composable () -> Unit
 ) {
     Surface(
         shape = CircleShape,
@@ -249,18 +262,21 @@ private fun ControlBand(
         border = BorderStroke(1.dp, Color(0x59FFFFFF)),
         modifier = modifier
     ) {
+        val slot: @Composable (Modifier, @Composable () -> Unit) -> Unit = { slotModifier, content ->
+            Box(slotModifier, contentAlignment = Alignment.Center) { content() }
+        }
         if (vertical) {
-            Column(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 28.dp),
-                verticalArrangement = Arrangement.SpaceEvenly,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) { content() }
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 28.dp)) {
+                slot(Modifier.weight(1f), leading)
+                slot(Modifier.weight(1f), center)
+                slot(Modifier.weight(1f), trailing)
+            }
         } else {
-            Row(
-                modifier = Modifier.padding(horizontal = 28.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) { content() }
+            Row(Modifier.padding(horizontal = 28.dp, vertical = 10.dp)) {
+                slot(Modifier.weight(1f), leading)
+                slot(Modifier.weight(1f), center)
+                slot(Modifier.weight(1f), trailing)
+            }
         }
     }
 }
