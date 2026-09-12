@@ -10,9 +10,11 @@ Android RTMP配信アプリ (Kotlin + Compose + RootEncoder)。PeerCastでの利
 
 ## バージョン互換
 
-- KGP は **2.3.x 必須**。2.1.0 では K2 コンパイラが内部エラーで落ちる (経緯は `docs/engineering/development.md` 参照)。
-- KGP 2.3 で `kotlinOptions` は廃止。`kotlin { compilerOptions { jvmTarget.set(...) } }` を使う。
-- KGP/AGP の組み合わせ変更時は公式互換表で確認する。
+- AGP 9 系 + Gradle 9 系。AGP 9 は Kotlin コンパイルを内蔵しているため `org.jetbrains.kotlin.android` は**適用しない**
+  (適用するとエラー)。`jvmTarget` は `compileOptions.targetCompatibility` に追従するので `kotlinOptions` / `kotlin { compilerOptions }` も書かない。
+- Kotlin (KGP) の版は `build.gradle.kts` の `org.jetbrains.kotlin.plugin.compose` の版で決まる (同版の KGP を classpath に引き込むため)。
+  **2.3.x 以上必須**。2.1.0 では K2 コンパイラが内部エラーで落ちる (経緯は `docs/engineering/development.md` 参照)。
+- KGP/AGP/Gradle の組み合わせ変更時は公式互換表 (`kotlinlang.org/docs/gradle-configure-project.html`) と AGP リリースノートで確認する。
 
 ## RootEncoder (最重要)
 

@@ -1,10 +1,8 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
 // リリース署名の情報は keystore.properties (git 管理外) から読む。
@@ -53,14 +51,10 @@ android {
             )
         }
     }
+    // AGP 内蔵 Kotlin では jvmTarget は targetCompatibility に追従するので別途指定しない
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-    kotlin {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
-        }
     }
     buildFeatures {
         compose = true

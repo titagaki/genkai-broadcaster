@@ -9,21 +9,25 @@ UI変更は、[現在のUI仕様](../ui/current.md)で現状を確認し、[UI�
 - Android SDK: `C:/Users/megan/AppData/Local/Android/Sdk`
   - 注意: `platforms` には `android-36` のみ入っている。`compileSdk = 36` はそのため。
     他の platform を入れれば下げられるが、現状 36 前提で書くこと。
-- Java は Android Studio 同梱の JBR を使う。プロジェクトのバイトコードは Java 17。
+- Java は Android Studio 同梱の JBR (JDK 25) を使う。プロジェクトのバイトコードは Java 17。
 
 ## バージョン (検証済み組み合わせ)
 
 | 項目 | バージョン |
 |------|-----------|
-| AGP | 8.9.2 |
-| KGP | 2.3.21 |
-| Gradle (wrapper) | 8.13 (`gradlew` / `gradlew.bat` / `gradle-wrapper.jar` を同梱。Gradle 本体は初回実行時に自動取得) |
+| AGP | 9.0.1 (Kotlin 内蔵。`org.jetbrains.kotlin.android` は適用しない) |
+| Kotlin / KGP | 2.3.21 (`org.jetbrains.kotlin.plugin.compose` の版で決まる。AGP 9.0.1 同梱の KGP は 2.2.10 だが、Compose プラグインが引き込む 2.3.21 が classpath 上で勝つ) |
+| Gradle (wrapper) | 9.2.1 (`gradlew` / `gradlew.bat` / `gradle-wrapper.jar` を同梱。Gradle 本体は初回実行時に自動取得) |
 | compileSdk / targetSdk / minSdk | 36 / 34 / 26 |
 | Compose BOM | 2025.01.00 |
 | RootEncoder | 2.8.1 (JitPack) |
 
 KGP と AGP の組み合わせを変える場合は、公式互換表
 (`kotlinlang.org/docs/gradle-configure-project.html`) で AGP 対応範囲を確認すること。
+2026-09 時点の表では KGP 2.3.20〜2.3.21 は Gradle 7.6.3〜9.3.0 / AGP 8.2.2〜9.0.0 が対応範囲。
+AGP 9.0.1 はこの上限をわずかに超えるが、9.0.x のパッチ差なので警告止まりの想定 (実ビルドで確認)。
+AGP 9.4.0 (Android Studio 2026.1.4 同梱) へ上げる場合は Gradle 9.6.0 以上が必要で、
+KGP も 2.4.x (AGP 〜9.3.1 対応) に上げるのが筋。別コミットで行う。
 
 ## ビルド手順 (ユーザー向け案内)
 
@@ -65,16 +69,14 @@ KGP と AGP の組み合わせを変える場合は、公式互換表
 または PowerShell でプロジェクト直下から `.\gradlew.bat :app:testDebugUnitTest`。`org.json` は android.jar のスタブが例外を投げるため、
 `testImplementation("org.json:json")` で実装を差し込んでいる。
 
-コマンドラインで実行する場合、PATH の Java が新しすぎる (JDK 25 など) と Gradle 8.13 が
-`What went wrong: 25.0.3` のようにバージョン番号だけ出して落ちる。Android Studio 同梱の `jbr` も JDK 25 なので使えない。
-`gradlew.bat` は `JAVA_HOME` を見るので、Android Studio が Gradle 用に取得している JDK 21
-(`%USERPROFILE%\.gradle\jdks\jetbrains_s_r_o_-21-amd64-windows.*`) をユーザー環境変数に設定しておく:
+コマンドラインで実行する場合、`gradlew.bat` は `JAVA_HOME` を見る。Gradle 9.2.1 は JDK 25 で動くので、
+Android Studio 同梱の `jbr` をそのまま使える:
 
 ```powershell
-[Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\Users\<user>\.gradle\jdks\jetbrains_s_r_o_-21-amd64-windows.2", "User")
+[Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\Program Files\Android\Android Studio\jbr", "User")
 ```
 
-(`org.gradle.java.home` はデーモン側の JDK 指定なので、起動スクリプト自体が新しい JDK で落ちる場合には効かない)
+(Gradle 8.13 時代は JDK 25 で起動できず JDK 21 を別途指定していた。経緯はトラブル履歴 5 を参照)
 
 対象は Android/エンジンに依存しない純粋ロジックのみ (`LensCatalog`、`H264Level`、`StreamDestination`)。
 `CameraController` や `StreamController` は Camera2 と RootEncoder に結合しているため実機確認で担保する。
@@ -153,16 +155,9 @@ grep -rn "旧シンボル名" app/src
 ### 2. `kotlinOptions` がエラーになる (KGP 2.3〜)
 
 - 症状: `Using 'jvmTarget: String' is an error. Please migrate to the compilerOptions DSL.`
-- 対処: `app/build.gradle.kts` を以下に変更。
-  ```kotlin
-  import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-  // ...
-  kotlin {
-      compilerOptions {
-          jvmTarget.set(JvmTarget.JVM_17)
-      }
-  }
-  ```
+- 対処 (当時): `kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }` に変更。
+- 現在 (AGP 9 内蔵 Kotlin): `jvmTarget` は `compileOptions.targetCompatibility` に追従するため、
+  このブロック自体を削除している。`org.jetbrains.kotlin.android` を適用しないので `kotlin {}` 拡張の扱いも変わる。
 
 ### 3. `disableAudio() / enableAudio()` が無い
 
@@ -173,3 +168,20 @@ grep -rn "旧シンボル名" app/src
 
 - 定数集約のリネーム後に `MainActivity` の参照が古いまま残り `Unresolved reference`。
 - 教訓: リネーム・集約後は必ず `grep` で旧シンボル名の残存を確認する。
+
+### 5. Gradle 8.13 が JDK 25 で起動できない → Gradle 9 / AGP 9 へ更新 (2026-09-13)
+
+- 症状: Android Studio 2026.1.4 同梱の `jbr` が JDK 25 になり、`gradlew.bat` が
+  `What went wrong: 25.0.3` とバージョン番号だけ出して落ちる。当面は JDK 21 を `JAVA_HOME` に指定して回避していた。
+- 対処: Gradle 8.13 → 9.2.1、AGP 8.9.2 → 9.0.1 に更新 (別プロジェクト JPNKNVox と同じ組み合わせ)。
+  AGP 9 は Kotlin コンパイルを内蔵するため以下を変更した:
+  - `org.jetbrains.kotlin.android` の適用をルート・app 両方から削除 (適用したままだと AGP 9 がエラーにする。
+    `android.builtInKotlin=false` で旧方式に戻せるが AGP 10 で撤去予定なので使わない)。
+  - `kotlin { compilerOptions { jvmTarget } }` を削除 (`targetCompatibility` に追従)。
+  - Kotlin の版は `org.jetbrains.kotlin.plugin.compose` の版 (2.3.21) で決まる。
+- AGP 9 でデフォルトが変わる主な項目 (このプロジェクトでの影響):
+  - `android.onlyEnableUnitTestForTheTestedBuildType=true`: 単体テストは debug のみ生成。`testDebugUnitTest` は従来通り。
+  - `android.enableAppCompileTimeRClass=true`: アプリの `R` が非 final になる。`when` の分岐に `R.*` を使っていないので影響なし。
+  - `android.sdk.defaultTargetSdkToCompileSdkIfUnset=true`: `targetSdk` は明示しているので影響なし。
+- 注意: `gradle-wrapper.jar` と `gradlew*` は 8.13 が生成したものをそのまま使っている (9.2.1 の取得・実行は可能)。
+  揃えたい場合は `.\gradlew.bat wrapper --gradle-version 9.2.1` を一度実行してコミットする。
