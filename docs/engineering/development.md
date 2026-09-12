@@ -31,6 +31,14 @@ KGP と AGP の組み合わせを変える場合は、公式互換表
 2. Gradle Sync
 3. Build → Clean Project → Rebuild Project (実機で実行)
 
+## アプリアイコン
+
+- `app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` の adaptive icon (background 色 + foreground + monochrome)。
+- 元絵は 1024px の角丸スクエア画像 (緑背景にキャラクター)。背景色 `#39A24F` を `values/ic_launcher_background.xml` に置き、
+  foreground は元絵から緑背景を抜いたキャラクターのみを、外接円が 66dp セーフゾーンに収まるよう縮小して 108dp キャンバス中央に配置した PNG (mdpi〜xxxhdpi)。
+- monochrome (Android 13 のテーマアイコン用) はキャラクターのシルエット。
+- minSdk 26 のため旧式の `ic_launcher.png` は置いていない。差し替え時は同じ手順で PNG を作り直す。
+
 ## エージェント側の検証手段
 
 コンパイルはできないため、以下で代替する:
