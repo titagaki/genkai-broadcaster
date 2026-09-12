@@ -1,4 +1,4 @@
-package com.example.genkaibroadcaster
+package io.github.titagaki.genkaibroadcaster
 
 import android.Manifest
 import android.content.SharedPreferences
@@ -11,9 +11,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
-import com.example.genkaibroadcaster.streamer.StreamConfig
-import com.example.genkaibroadcaster.streamer.StreamController
-import com.example.genkaibroadcaster.ui.AppRoot
+import io.github.titagaki.genkaibroadcaster.streamer.StreamConfig
+import io.github.titagaki.genkaibroadcaster.streamer.StreamController
+import io.github.titagaki.genkaibroadcaster.ui.AppRoot
 
 /**
  * アプリの入口。責務は3つのみ:

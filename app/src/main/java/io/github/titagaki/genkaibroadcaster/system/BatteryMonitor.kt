@@ -1,4 +1,4 @@
-package com.example.genkaibroadcaster.system
+package io.github.titagaki.genkaibroadcaster.system
 
 import android.content.Context
 import android.content.Intent

@@ -1,4 +1,4 @@
-package com.example.genkaibroadcaster.streamer
+package io.github.titagaki.genkaibroadcaster.streamer
 
 import android.Manifest
 import android.content.Context
@@ -13,7 +13,7 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
-import com.example.genkaibroadcaster.StreamService
+import io.github.titagaki.genkaibroadcaster.StreamService
 import com.pedro.common.AudioCodec
 import com.pedro.common.ConnectChecker
 import com.pedro.common.StreamingStatsReport

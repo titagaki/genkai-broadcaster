@@ -1,4 +1,4 @@
-package com.example.genkaibroadcaster.streamer
+package io.github.titagaki.genkaibroadcaster.streamer
 
 import org.json.JSONArray
 import org.json.JSONObject

@@ -7,11 +7,11 @@ plugins {
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 android {
-    namespace = "com.example.genkaibroadcaster"
+    namespace = "io.github.titagaki.genkaibroadcaster"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.genkaibroadcaster"
+        applicationId = "io.github.titagaki.genkaibroadcaster"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

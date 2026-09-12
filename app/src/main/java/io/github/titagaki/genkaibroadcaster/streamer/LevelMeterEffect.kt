@@ -1,4 +1,4 @@
-package com.example.genkaibroadcaster.streamer
+package io.github.titagaki.genkaibroadcaster.streamer
 
 import com.pedro.encoder.input.audio.CustomAudioEffect
 import kotlin.math.abs

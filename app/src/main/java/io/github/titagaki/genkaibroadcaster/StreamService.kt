@@ -1,4 +1,4 @@
-package com.example.genkaibroadcaster
+package io.github.titagaki.genkaibroadcaster
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -10,7 +10,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.example.genkaibroadcaster.streamer.StreamController
+import io.github.titagaki.genkaibroadcaster.streamer.StreamController
 
 /**
  * Foreground keep-alive service for IRL streaming.
@@ -87,8 +87,8 @@ class StreamService : Service() {
     companion object {
         const val CHANNEL_ID = "stream_channel"
         const val NOTIF_ID = 1001
-        const val ACTION_START = "com.example.genkaibroadcaster.START"
-        const val ACTION_STOP = "com.example.genkaibroadcaster.STOP"
+        const val ACTION_START = "io.github.titagaki.genkaibroadcaster.START"
+        const val ACTION_STOP = "io.github.titagaki.genkaibroadcaster.STOP"
         private const val EXTRA_SESSION = "stream_session"
 
         fun start(context: Context, session: Int) {

@@ -1,4 +1,4 @@
-package com.example.genkaibroadcaster.streamer
+package io.github.titagaki.genkaibroadcaster.streamer
 
 import android.content.Context
 import android.hardware.camera2.CameraCharacteristics

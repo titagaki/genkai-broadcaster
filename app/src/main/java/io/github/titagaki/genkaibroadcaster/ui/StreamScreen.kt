@@ -1,4 +1,4 @@
-package com.example.genkaibroadcaster.ui
+package io.github.titagaki.genkaibroadcaster.ui
 
 import android.content.SharedPreferences
 import android.os.SystemClock
@@ -62,14 +62,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.example.genkaibroadcaster.streamer.CameraZoomChoice
-import com.example.genkaibroadcaster.streamer.CameraZoomState
-import com.example.genkaibroadcaster.streamer.RESOLUTIONS
-import com.example.genkaibroadcaster.streamer.StreamController
-import com.example.genkaibroadcaster.streamer.StreamPrefs
-import com.example.genkaibroadcaster.streamer.StreamState
-import com.example.genkaibroadcaster.system.BatteryMonitor
-import com.example.genkaibroadcaster.system.MicrophoneMonitor
+import io.github.titagaki.genkaibroadcaster.streamer.CameraZoomChoice
+import io.github.titagaki.genkaibroadcaster.streamer.CameraZoomState
+import io.github.titagaki.genkaibroadcaster.streamer.RESOLUTIONS
+import io.github.titagaki.genkaibroadcaster.streamer.StreamController
+import io.github.titagaki.genkaibroadcaster.streamer.StreamPrefs
+import io.github.titagaki.genkaibroadcaster.streamer.StreamState
+import io.github.titagaki.genkaibroadcaster.system.BatteryMonitor
+import io.github.titagaki.genkaibroadcaster.system.MicrophoneMonitor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.Locale

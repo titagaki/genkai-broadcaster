@@ -1,4 +1,4 @@
-package com.example.genkaibroadcaster.ui
+package io.github.titagaki.genkaibroadcaster.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background

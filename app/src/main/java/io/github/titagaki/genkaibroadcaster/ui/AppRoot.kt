@@ -1,4 +1,4 @@
-package com.example.genkaibroadcaster.ui
+package io.github.titagaki.genkaibroadcaster.ui
 
 import android.content.SharedPreferences
 import androidx.compose.material3.MaterialTheme
@@ -11,8 +11,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
-import com.example.genkaibroadcaster.streamer.StreamController
-import com.example.genkaibroadcaster.streamer.StreamPrefs
+import io.github.titagaki.genkaibroadcaster.streamer.StreamController
+import io.github.titagaki.genkaibroadcaster.streamer.StreamPrefs
 
 /**
  * 画面遷移の管理。配信画面⇔設定画面の2画面のみ。

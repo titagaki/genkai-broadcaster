@@ -1,4 +1,4 @@
-package com.example.genkaibroadcaster.ui
+package io.github.titagaki.genkaibroadcaster.ui
 
 import android.content.SharedPreferences
 import androidx.activity.compose.BackHandler
@@ -77,13 +77,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.genkaibroadcaster.streamer.DestinationPreset
-import com.example.genkaibroadcaster.streamer.RESOLUTIONS
-import com.example.genkaibroadcaster.streamer.StreamDestination
-import com.example.genkaibroadcaster.streamer.StreamConfig
-import com.example.genkaibroadcaster.streamer.StreamController
-import com.example.genkaibroadcaster.streamer.StreamPrefs
-import com.example.genkaibroadcaster.streamer.ZoomDebugOverride
+import io.github.titagaki.genkaibroadcaster.streamer.DestinationPreset
+import io.github.titagaki.genkaibroadcaster.streamer.RESOLUTIONS
+import io.github.titagaki.genkaibroadcaster.streamer.StreamDestination
+import io.github.titagaki.genkaibroadcaster.streamer.StreamConfig
+import io.github.titagaki.genkaibroadcaster.streamer.StreamController
+import io.github.titagaki.genkaibroadcaster.streamer.StreamPrefs
+import io.github.titagaki.genkaibroadcaster.streamer.ZoomDebugOverride
 
 /**
  * 設定のカテゴリ。トップのメニューから1階層だけ掘る構成にしている。
