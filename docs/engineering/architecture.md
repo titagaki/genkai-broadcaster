@@ -17,17 +17,38 @@
 
 ```text
 app/src/main/java/io/github/titagaki/genkaibroadcaster/
-├── MainActivity.kt      生成、権限要求、画面方向、Compose表示
-├── StreamService.kt     Foreground Serviceと通知
-├── streamer/            配信、カメラ、設定値、接続先モデル (StreamDestination)
-├── system/              電池・マイクなどの端末情報 (BatteryMonitor, MicrophoneMonitor)
-└── ui/                  画面と表示部品
+├── MainActivity.kt          生成、権限要求、画面方向、Compose表示
+├── StreamService.kt         Foreground Serviceと通知
+├── streamer/
+│   ├── StreamController.kt  配信・プレビュー・マイク。UI からの唯一の入口 (カメラ操作は転送)
+│   ├── CameraController.kt  レンズ切替 (Capture完了待ちの状態機械) とズーム。internal
+│   ├── LensCatalog.kt       レンズ一覧から選択肢・倍率を決める純粋ロジック (JVMテスト対象)
+│   ├── CameraLenses.kt      Camera2 からのレンズ列挙 (LensOption)
+│   ├── StreamState.kt       UI が購読する状態モデル (StreamState, CameraZoomState など)
+│   ├── StreamConfig.kt      定数 (解像度一覧 RESOLUTIONS を含む)
+│   ├── StreamPrefs.kt       SharedPreferences の読み書き (インスタンス)
+│   ├── StreamDestination.kt 接続先モデルとプリセット
+│   ├── Resolution.kt / H264Level.kt / LevelMeterEffect.kt
+├── system/                  電池・マイクなどの端末情報 (BatteryMonitor, MicrophoneMonitor)
+└── ui/
+    ├── AppRoot.kt           画面切替、通知文 (messages) の Toast 表示
+    ├── Theme.kt             MaterialTheme の配色と、プレビュー上に重ねる部品の色 (OverlayColors)
+    ├── StreamScreen.kt      配信画面
+    ├── Components.kt        画面をまたいで使う部品
+    └── settings/            設定画面 (SettingsScreen と各ページ、設定画面専用の部品)
+app/src/test/java/.../streamer/   LensCatalog / H264Level / StreamDestination の JVM テスト
 ```
 
 ## 層ルール
 
 - `MainActivity`は生成、権限、表示だけを担当し、配信ロジックを持たない。
 - UI層から配信機能を使う場合は`StreamController`、`StreamPrefs`、`StreamConfig`、`StreamDestination`を経由する。
-- 定数は`StreamConfig`、SharedPreferencesのキー文字列は`StreamPrefs`へ集約する。
+  `CameraController`は`internal`で、UIは`StreamController`の転送メソッド (`cameraZoomChoices`、`selectCamera`、`changeZoomBy`など) だけを使う。
+- 定数は`StreamConfig`、SharedPreferencesのキー文字列は`StreamPrefs`へ集約する。`StreamPrefs`はインスタンスとして
+  `MainActivity`が生成し、UI層には`SharedPreferences`型を渡さない。
+- streamer層はToastなどのUIを直接出さない。一時的な通知文は`StreamController.messages` (SharedFlow) に流し、`AppRoot`がToastで表示する。
+- `StreamState.status`の文言は現状streamer層で組み立てている (日本語専用アプリのため`strings.xml`化もしていない)。
+  多言語化する場合は`status`を`sealed class`にし、文字列化をUI層へ移す。
+- Camera2・エンジンに依存しないロジックは`LensCatalog`のように純粋クラスへ寄せ、`app/src/test`でJVMテストする。
 - UI層からRootEncoder APIを直接呼ばない。
 - FLV／RTMPの内部処理、独自muxer、独自エンコーダーを追加しない。

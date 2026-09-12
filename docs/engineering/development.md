@@ -17,7 +17,7 @@ UI変更は、[現在のUI仕様](../ui/current.md)で現状を確認し、[UI�
 |------|-----------|
 | AGP | 8.9.2 |
 | KGP | 2.3.21 |
-| Gradle (wrapper) | 8.13 |
+| Gradle (wrapper) | 8.13 (`gradlew` / `gradlew.bat` / `gradle-wrapper.jar` を同梱。Gradle 本体は初回実行時に自動取得) |
 | compileSdk / targetSdk / minSdk | 36 / 34 / 26 |
 | Compose BOM | 2025.01.00 |
 | RootEncoder | 2.8.1 (JitPack) |
@@ -58,6 +58,26 @@ KGP と AGP の組み合わせを変える場合は、公式互換表
   foreground は元絵から緑背景を抜いたキャラクターのみを、外接円が 66dp セーフゾーンに収まるよう縮小して 108dp キャンバス中央に配置した PNG (mdpi〜xxxhdpi)。
 - monochrome (Android 13 のテーマアイコン用) はキャラクターのシルエット。
 - minSdk 26 のため旧式の `ic_launcher.png` は置いていない。差し替え時は同じ手順で PNG を作り直す。
+
+## 単体テスト
+
+`app/src/test` に JVM テスト (JUnit 4) を置いている。Android Studio で `app/src/test` を右クリック → Run、
+または PowerShell でプロジェクト直下から `.\gradlew.bat :app:testDebugUnitTest`。`org.json` は android.jar のスタブが例外を投げるため、
+`testImplementation("org.json:json")` で実装を差し込んでいる。
+
+コマンドラインで実行する場合、PATH の Java が新しすぎる (JDK 25 など) と Gradle 8.13 が
+`What went wrong: 25.0.3` のようにバージョン番号だけ出して落ちる。Android Studio 同梱の `jbr` も JDK 25 なので使えない。
+`gradlew.bat` は `JAVA_HOME` を見るので、Android Studio が Gradle 用に取得している JDK 21
+(`%USERPROFILE%\.gradle\jdks\jetbrains_s_r_o_-21-amd64-windows.*`) をユーザー環境変数に設定しておく:
+
+```powershell
+[Environment]::SetEnvironmentVariable("JAVA_HOME", "C:\Users\<user>\.gradle\jdks\jetbrains_s_r_o_-21-amd64-windows.2", "User")
+```
+
+(`org.gradle.java.home` はデーモン側の JDK 指定なので、起動スクリプト自体が新しい JDK で落ちる場合には効かない)
+
+対象は Android/エンジンに依存しない純粋ロジックのみ (`LensCatalog`、`H264Level`、`StreamDestination`)。
+`CameraController` や `StreamController` は Camera2 と RootEncoder に結合しているため実機確認で担保する。
 
 ## エージェント側の検証手段
 

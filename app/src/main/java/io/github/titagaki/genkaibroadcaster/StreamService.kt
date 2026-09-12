@@ -7,18 +7,18 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import io.github.titagaki.genkaibroadcaster.streamer.StreamController
 
 /**
- * Foreground keep-alive service for IRL streaming.
- * The process-scoped StreamController owns the encoder independently of Activity.
- * Notification actions stop that same controller before removing the service.
+ * 配信中にプロセスを生かしておくための Foreground Service。
+ * エンジンはプロセス共有の [StreamController] が持ち、Activity の生死とは独立に動く。
+ * 通知の「停止」は同じ Controller を止めてから Service を消す。
  */
 class StreamService : Service() {
 
+    /** 開始時に受け取った Controller の世代。onDestroy で古い世代の停止要求を無視するため */
     private var session = -1
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -34,18 +34,17 @@ class StreamService : Service() {
                 StreamController.getInstance(this).stopStream()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
-                return START_NOT_STICKY
             }
             else -> {
                 session = intent?.getIntExtra(EXTRA_SESSION, -1) ?: -1
-                startForeground(NOTIF_ID, buildNotification())
+                startForeground(NOTIFICATION_ID, buildNotification())
                 if (!StreamController.getInstance(this).isStreamingNow()) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
                 }
-                return START_NOT_STICKY
             }
         }
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
@@ -54,13 +53,11 @@ class StreamService : Service() {
     }
 
     private fun createChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID, "Live streaming",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply { description = "Shows while broadcasting" }
-            getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
-        }
+        val channel = NotificationChannel(
+            CHANNEL_ID, "Live streaming",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply { description = "Shows while broadcasting" }
+        getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification {
@@ -77,29 +74,27 @@ class StreamService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Genkai Broadcaster")
             .setContentText("RTMP配信処理中 (接続・再接続を含む)。タップでアプリに戻る")
-            .setSmallIcon(android.R.drawable.presence_video_online)
+            .setSmallIcon(R.drawable.ic_notification_stream)
             .setContentIntent(openApp)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "停止", stopIntent)
+            .addAction(R.drawable.ic_notification_stop, "停止", stopIntent)
             .setOngoing(true)
             .build()
     }
 
     companion object {
-        const val CHANNEL_ID = "stream_channel"
-        const val NOTIF_ID = 1001
-        const val ACTION_START = "io.github.titagaki.genkaibroadcaster.START"
-        const val ACTION_STOP = "io.github.titagaki.genkaibroadcaster.STOP"
+        private const val CHANNEL_ID = "stream_channel"
+        private const val NOTIFICATION_ID = 1001
+        private const val ACTION_START = "io.github.titagaki.genkaibroadcaster.START"
+        private const val ACTION_STOP = "io.github.titagaki.genkaibroadcaster.STOP"
         private const val EXTRA_SESSION = "stream_session"
 
+        /** @param session 呼び出し時点の Controller 世代。Service 終了時の照合に使う */
         fun start(context: Context, session: Int) {
             val intent = Intent(context, StreamService::class.java)
                 .setAction(ACTION_START)
                 .putExtra(EXTRA_SESSION, session)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            // minSdk 26 なので常に startForegroundService でよい
+            context.startForegroundService(intent)
         }
 
         fun stop(context: Context) {

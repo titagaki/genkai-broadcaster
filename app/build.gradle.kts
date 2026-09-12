@@ -64,6 +64,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true // BuildConfig.DEBUG をデバッグ専用機能の判定に使う
     }
 }
 
@@ -80,10 +81,16 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
+    // StateFlow / SharedFlow を直接使うので推移依存に頼らず明示する
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     // RTMP streaming (camera + mic encoder) - RootEncoder (pedroSG94)
     // https://github.com/pedroSG94/RootEncoder
     implementation("com.github.pedroSG94.RootEncoder:library:2.8.1")
+
+    // JVM 単体テスト。org.json は android.jar のスタブが例外を投げるため実装を差し込む
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

@@ -13,7 +13,7 @@
 | ID | 画面 | 実装 | 概要 |
 |----|------|------|------|
 | S-01 | 配信画面 | `ui/StreamScreen.kt` | プレビュー領域 + スタジアム形の操作帯、オーバーレイ情報 |
-| S-02 | 設定画面 | `ui/SettingsScreen.kt` | カテゴリメニュー → 配信 / 映像 / カメラ / 権限 |
+| S-02 | 設定画面 | `ui/settings/SettingsScreen.kt` (各ページは同ディレクトリ) | カテゴリメニュー → 配信 / 映像 / カメラ / 権限 |
 | S-03 | カメラ・倍率ポップアップ | `CameraZoomSelector` | `FRONT` / `BACK`と倍率の選択 |
 
 `ui/AppRoot.kt`がS-01とS-02を切り替える。画面方向の変更でActivityが再生成されても、

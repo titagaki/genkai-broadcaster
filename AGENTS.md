@@ -4,8 +4,8 @@ Android RTMP配信アプリ (Kotlin + Compose + RootEncoder)。PeerCastでの利
 
 ## ビルド・検証
 
-- 実ビルドはユーザーが手元の Android Studio (Windows) で行う。WSL側に java/gradle は無い。
-- エージェント側の検証は `python3` の括弧チェックと `grep` の参照残りチェックのみ。
+- 実ビルドと単体テスト (`app/src/test`) の実行はユーザーが手元の Android Studio (Windows) で行う。WSL側に java/gradle は無い。
+- エージェント側の検証は `python3` の括弧チェックと `grep` の参照残りチェックのみ。純粋ロジックを触ったらテストも書く/直す。
 - 環境・バージョン・手順・トラブル履歴は `docs/engineering/development.md`。
 
 ## バージョン互換
@@ -24,13 +24,22 @@ Android RTMP配信アプリ (Kotlin + Compose + RootEncoder)。PeerCastでの利
 
 ```
 MainActivity (生成・権限・表示のみ、ロジック禁止)
-streamer/ : StreamController / StreamConfig (定数) / StreamPrefs (設定キー) / StreamDestination (接続先モデル)
+StreamService (Foreground Service と通知のみ)
+streamer/ : StreamController (配信・プレビュー・マイク、UI の唯一の入口)
+            CameraController (レンズ切替・ズームの状態機械、internal)
+            LensCatalog (レンズ選択の純粋ロジック、JVM テスト対象)
+            StreamState (UI が購読する状態モデル) / StreamConfig (定数) / StreamPrefs (設定の読み書き)
+            StreamDestination (接続先モデル) / CameraLenses (Camera2 列挙) / H264Level
 system/   : 端末情報 (BatteryMonitor等)
-ui/       : AppRoot / StreamScreen / SettingsScreen / components
+ui/       : AppRoot / Theme / StreamScreen / Components / settings/ (SettingsScreen と各ページ)
 ```
 
 - UI層 → streamer層は `StreamController`/`StreamPrefs`/`StreamConfig`/`StreamDestination` 経由のみ。
-- 定数は `StreamConfig` に、設定キー文字列は `StreamPrefs` に集約。
+  `CameraController` は internal で、UI からは `StreamController` の転送メソッドだけを使う。
+- 定数は `StreamConfig` に、設定キー文字列は `StreamPrefs` に集約。`StreamPrefs` はインスタンス (`StreamPrefs(context)`)
+  で、UI 層に `SharedPreferences` を持ち込まない。
+- streamer 層は UI (Toast 等) を直接出さず、`StreamController.messages` (SharedFlow) に文字列を流す。表示は `AppRoot` が担う。
+- Camera2 やエンジンに依存しないロジックは `LensCatalog` のように純粋クラスへ寄せ、`app/src/test` に JVM テストを置く。
 
 ## ドキュメント
 
