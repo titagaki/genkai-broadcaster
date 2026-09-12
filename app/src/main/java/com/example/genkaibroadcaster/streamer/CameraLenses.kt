@@ -1,4 +1,4 @@
-package com.example.hogebroadcaster.streamer
+package com.example.genkaibroadcaster.streamer
 
 import android.content.Context
 import android.hardware.camera2.CameraCharacteristics

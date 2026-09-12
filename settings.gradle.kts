@@ -13,5 +13,5 @@ dependencyResolutionManagement {
         maven { url = uri("https://jitpack.io") }
     }
 }
-rootProject.name = "hoge-broadcaster"
+rootProject.name = "genkai-broadcaster"
 include(":app")

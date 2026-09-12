@@ -1,4 +1,4 @@
-package com.example.hogebroadcaster.streamer
+package com.example.genkaibroadcaster.streamer
 
 import android.media.MediaCodecInfo
 
@@ -45,7 +45,7 @@ object StreamConfig {
     const val DEFAULT_RES_INDEX = 1 // 720p
 
     // ---- Prefs ----
-    const val PREFS_FILE = "hoge_broadcaster"
+    const val PREFS_FILE = "genkai_broadcaster"
     const val DEFAULT_SERVER = "rtmp://pcgw.pgw.jp/live"
 
 }

@@ -1,4 +1,4 @@
-package com.example.hogebroadcaster.streamer
+package com.example.genkaibroadcaster.streamer
 
 import android.media.MediaCodecInfo
 

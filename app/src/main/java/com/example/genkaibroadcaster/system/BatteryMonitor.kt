@@ -1,4 +1,4 @@
-package com.example.hogebroadcaster.system
+package com.example.genkaibroadcaster.system
 
 import android.content.Context
 import android.content.Intent

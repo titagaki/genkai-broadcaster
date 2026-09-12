@@ -7,11 +7,11 @@ plugins {
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 android {
-    namespace = "com.example.hogebroadcaster"
+    namespace = "com.example.genkaibroadcaster"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.hogebroadcaster"
+        applicationId = "com.example.genkaibroadcaster"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

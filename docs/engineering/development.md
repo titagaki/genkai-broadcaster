@@ -40,7 +40,7 @@ KGP と AGP の組み合わせを変える場合は、公式互換表
 # 括弧バランス (全Kotlinファイル)
 python3 -c "
 import pathlib
-base = pathlib.Path('app/src/main/java/com/example/hogebroadcaster')
+base = pathlib.Path('app/src/main/java/com/example/genkaibroadcaster')
 for f in sorted(base.rglob('*.kt')):
     p = f.read_text()
     print(f.name, p.count('{')-p.count('}'), p.count('(')-p.count(')'))

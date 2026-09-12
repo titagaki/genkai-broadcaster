@@ -18,7 +18,7 @@
     <application
         android:allowBackup="true"
         android:icon="@android:mipmap/sym_def_app_icon"
-        android:label="Hoge Broadcaster"
+        android:label="Genkai Broadcaster"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar"
         tools:targetApi="34">

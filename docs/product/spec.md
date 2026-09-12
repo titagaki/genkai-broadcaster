@@ -1,4 +1,4 @@
-# Hoge Broadcaster 仕様書 (v0.1.0)
+# Genkai Broadcaster 仕様書 (v0.1.0)
 
 Android RTMP配信アプリの仕様定義。
 実装の基準とし、仕様変更時は本書を更新する。
@@ -228,7 +228,7 @@ push配信するAndroidアプリ。
 
 ## 9. 設定保存仕様
 
-SharedPreferences `hoge_broadcaster` に保存:
+SharedPreferences `genkai_broadcaster` に保存:
 
 | キー | 内容 | 既定値 |
 |------|------|--------|

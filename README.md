@@ -1,4 +1,4 @@
-# Hoge Broadcaster
+# Genkai Broadcaster
 
 Android端末のカメラとマイクを使う、シンプルなRTMPライブ配信アプリです。
 任意のRTMPサーバーURLとストリームキーを指定して、H.264 + AACの映像・音声を送信できます。

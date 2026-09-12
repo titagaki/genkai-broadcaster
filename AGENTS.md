@@ -1,4 +1,4 @@
-# AGENTS.md — hoge-broadcaster
+# AGENTS.md — genkai-broadcaster
 
 Android RTMP配信アプリ (Kotlin + Compose + RootEncoder)。PeerCastでの利用も想定するが、専用・特化アプリではない。ユーザーとは日本語で会話する。
 

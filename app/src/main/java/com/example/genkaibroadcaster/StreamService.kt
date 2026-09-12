@@ -1,4 +1,4 @@
-package com.example.hogebroadcaster
+package com.example.genkaibroadcaster
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -10,7 +10,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.example.hogebroadcaster.streamer.StreamController
+import com.example.genkaibroadcaster.streamer.StreamController
 
 /**
  * Foreground keep-alive service for IRL streaming.
@@ -75,7 +75,7 @@ class StreamService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Hoge Broadcaster")
+            .setContentTitle("Genkai Broadcaster")
             .setContentText("RTMP配信処理中 (接続・再接続を含む)。タップでアプリに戻る")
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setContentIntent(openApp)
@@ -87,8 +87,8 @@ class StreamService : Service() {
     companion object {
         const val CHANNEL_ID = "stream_channel"
         const val NOTIF_ID = 1001
-        const val ACTION_START = "com.example.hogebroadcaster.START"
-        const val ACTION_STOP = "com.example.hogebroadcaster.STOP"
+        const val ACTION_START = "com.example.genkaibroadcaster.START"
+        const val ACTION_STOP = "com.example.genkaibroadcaster.STOP"
         private const val EXTRA_SESSION = "stream_session"
 
         fun start(context: Context, session: Int) {

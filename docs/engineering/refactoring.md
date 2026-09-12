@@ -21,8 +21,8 @@
 
 ## カメラ状態
 
-対象: [StreamController.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt)、
-[StreamScreen.kt](../../app/src/main/java/com/example/hogebroadcaster/ui/StreamScreen.kt)
+対象: [StreamController.kt](../../app/src/main/java/com/example/genkaibroadcaster/streamer/StreamController.kt)、
+[StreamScreen.kt](../../app/src/main/java/com/example/genkaibroadcaster/ui/StreamScreen.kt)
 
 - `StreamState`に`cameraIsFront`、`selectedLens`、`zoom`、`cameraError`を保持する。
 - UIはControllerへ現在値を再照会せず、`StateFlow`の確定済み状態だけを表示する。
@@ -32,7 +32,7 @@
 
 ## プレビュー処理
 
-対象: [StreamController.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamController.kt)
+対象: [StreamController.kt](../../app/src/main/java/com/example/genkaibroadcaster/streamer/StreamController.kt)
 
 - `stopPreviewAndReleaseIfIdle()`へSurface喪失時の共通処理を集約した。
 - `prepareFromPrefs()`は映像・音声の準備と成否返却だけを担当する。
@@ -43,9 +43,9 @@
 
 ## 設定と単位
 
-対象: [StreamConfig.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamConfig.kt)、
-[StreamPrefs.kt](../../app/src/main/java/com/example/hogebroadcaster/streamer/StreamPrefs.kt)、
-[SettingsScreen.kt](../../app/src/main/java/com/example/hogebroadcaster/ui/SettingsScreen.kt)
+対象: [StreamConfig.kt](../../app/src/main/java/com/example/genkaibroadcaster/streamer/StreamConfig.kt)、
+[StreamPrefs.kt](../../app/src/main/java/com/example/genkaibroadcaster/streamer/StreamPrefs.kt)、
+[SettingsScreen.kt](../../app/src/main/java/com/example/genkaibroadcaster/ui/SettingsScreen.kt)
 
 - 準備済み条件は幅、高さ、映像ビットレート、回転を持つ`StreamPreparationConfig`で比較する。
 - SharedPreferencesとUIのビットレート単位は従来どおりkbpsとする。
@@ -55,7 +55,7 @@
 
 ## UI更新範囲
 
-対象: [StreamScreen.kt](../../app/src/main/java/com/example/hogebroadcaster/ui/StreamScreen.kt)
+対象: [StreamScreen.kt](../../app/src/main/java/com/example/genkaibroadcaster/ui/StreamScreen.kt)
 
 - 100msごとの音量取得と減衰は`LiveAudioMeter`内で管理する。
 - 1秒ごとの経過時間と30秒ごとの電池取得は`StreamInfo`内で管理する。

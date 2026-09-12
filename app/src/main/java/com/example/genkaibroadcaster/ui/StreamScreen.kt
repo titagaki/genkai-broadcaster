@@ -1,4 +1,4 @@
-package com.example.hogebroadcaster.ui
+package com.example.genkaibroadcaster.ui
 
 import android.content.SharedPreferences
 import android.os.SystemClock
@@ -58,13 +58,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.example.hogebroadcaster.streamer.CameraZoomChoice
-import com.example.hogebroadcaster.streamer.CameraZoomState
-import com.example.hogebroadcaster.streamer.RESOLUTIONS
-import com.example.hogebroadcaster.streamer.StreamConfig
-import com.example.hogebroadcaster.streamer.StreamController
-import com.example.hogebroadcaster.streamer.StreamPrefs
-import com.example.hogebroadcaster.system.BatteryMonitor
+import com.example.genkaibroadcaster.streamer.CameraZoomChoice
+import com.example.genkaibroadcaster.streamer.CameraZoomState
+import com.example.genkaibroadcaster.streamer.RESOLUTIONS
+import com.example.genkaibroadcaster.streamer.StreamConfig
+import com.example.genkaibroadcaster.streamer.StreamController
+import com.example.genkaibroadcaster.streamer.StreamPrefs
+import com.example.genkaibroadcaster.system.BatteryMonitor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.Locale

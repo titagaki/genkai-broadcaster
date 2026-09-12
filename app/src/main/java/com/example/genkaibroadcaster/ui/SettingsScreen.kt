@@ -1,4 +1,4 @@
-package com.example.hogebroadcaster.ui
+package com.example.genkaibroadcaster.ui
 
 import android.content.SharedPreferences
 import androidx.activity.compose.BackHandler
@@ -52,11 +52,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.hogebroadcaster.streamer.RESOLUTIONS
-import com.example.hogebroadcaster.streamer.StreamConfig
-import com.example.hogebroadcaster.streamer.StreamController
-import com.example.hogebroadcaster.streamer.StreamPrefs
-import com.example.hogebroadcaster.streamer.ZoomDebugOverride
+import com.example.genkaibroadcaster.streamer.RESOLUTIONS
+import com.example.genkaibroadcaster.streamer.StreamConfig
+import com.example.genkaibroadcaster.streamer.StreamController
+import com.example.genkaibroadcaster.streamer.StreamPrefs
+import com.example.genkaibroadcaster.streamer.ZoomDebugOverride
 
 /** 配信先・映像・権限を分けて表示する。変更は端末へ自動保存する。 */
 @Composable

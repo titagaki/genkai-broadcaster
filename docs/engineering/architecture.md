@@ -10,13 +10,13 @@
 | UI | Jetpack Compose (Material 3) + `AndroidView`内の`SurfaceView` |
 | 配信エンジン | RootEncoder 2.8.1の`GenericStream`とCamera2ソース |
 | 常駐化 | `StreamService` (`foregroundServiceType="camera\|microphone"`) |
-| 設定保存 | SharedPreferences (`hoge_broadcaster`) |
+| 設定保存 | SharedPreferences (`genkai_broadcaster`) |
 | 依存取得 | JitPack (`com.github.pedroSG94.RootEncoder`) |
 
 ## 層構成
 
 ```text
-app/src/main/java/com/example/hogebroadcaster/
+app/src/main/java/com/example/genkaibroadcaster/
 ├── MainActivity.kt      生成、権限要求、画面方向、Compose表示
 ├── StreamService.kt     Foreground Serviceと通知
 ├── streamer/            配信、カメラ、設定値

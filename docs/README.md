@@ -1,6 +1,6 @@
 # ドキュメント
 
-Hoge Broadcasterの文書を目的別に分類しています。
+Genkai Broadcasterの文書を目的別に分類しています。
 製品の振る舞いを変更する場合は、正本である[製品仕様](product/spec.md)も更新してください。
 
 ## Product

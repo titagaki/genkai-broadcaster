@@ -1,4 +1,4 @@
-package com.example.hogebroadcaster
+package com.example.genkaibroadcaster
 
 import android.Manifest
 import android.content.SharedPreferences
@@ -11,9 +11,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
-import com.example.hogebroadcaster.streamer.StreamConfig
-import com.example.hogebroadcaster.streamer.StreamController
-import com.example.hogebroadcaster.ui.AppRoot
+import com.example.genkaibroadcaster.streamer.StreamConfig
+import com.example.genkaibroadcaster.streamer.StreamController
+import com.example.genkaibroadcaster.ui.AppRoot
 
 /**
  * アプリの入口。責務は3つのみ:
