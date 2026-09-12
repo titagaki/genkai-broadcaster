@@ -9,42 +9,64 @@ import android.content.SharedPreferences
  * 生のキー文字列をUI層に書かない。
  */
 object StreamPrefs {
-    private const val KEY_SERVER = "rtmp_server"
-    private const val KEY_STREAM_KEY = "stream_key"
+    private const val KEY_DESTINATIONS = "destinations"
+    private const val KEY_ACTIVE_DESTINATION = "active_destination"
     private const val KEY_RES_INDEX = "res_index"
     private const val KEY_BITRATE_KBPS = "bitrate_kbps"
     private const val KEY_FPS = "video_fps"
     private const val KEY_PORTRAIT = "stream_portrait"
 
-    /** 旧版の単一URLキー。移行後は削除される */
+    /** 旧版のキー。複数接続先 (destinations) へ移行後に削除される */
     private const val KEY_LEGACY_URL = "rtmp_url"
+    private const val KEY_LEGACY_SERVER = "rtmp_server"
+    private const val KEY_LEGACY_STREAM_KEY = "stream_key"
 
-    // 旧版(rtmp_url単一欄)からの移行: "rtmp://host/live/key" を server/key に分割
+    /**
+     * 旧版 (単一の rtmp_url、または rtmp_server + stream_key) から複数接続先へ移行する。
+     * destinations が無い場合だけ実行し、旧値を1件目の接続先として取り込む。
+     */
     private fun migrateLegacy(prefs: SharedPreferences) {
-        if (!prefs.contains(KEY_LEGACY_URL)) return
+        if (prefs.contains(KEY_DESTINATIONS)) return
 
         val legacyUrl = prefs.getString(KEY_LEGACY_URL, "").orEmpty()
-        val editor = prefs.edit()
-        if (!prefs.contains(KEY_SERVER)) {
-            editor.putString(
-                KEY_SERVER,
-                legacyUrl.substringBeforeLast("/", "").ifEmpty { StreamConfig.DEFAULT_SERVER }
-            )
-        }
-        if (!prefs.contains(KEY_STREAM_KEY)) {
-            editor.putString(KEY_STREAM_KEY, legacyUrl.substringAfterLast("/", ""))
-        }
-        editor.remove(KEY_LEGACY_URL).apply()
+        val server = prefs.getString(KEY_LEGACY_SERVER, null)
+            ?: legacyUrl.substringBeforeLast("/", "").ifEmpty { StreamConfig.DEFAULT_SERVER }
+        val key = prefs.getString(KEY_LEGACY_STREAM_KEY, null)
+            ?: legacyUrl.substringAfterLast("/", "")
+        val first = StreamDestination(
+            StreamDestination.newId(), StreamConfig.DEFAULT_DESTINATION_NAME, server, key
+        )
+        prefs.edit()
+            .putString(KEY_DESTINATIONS, StreamDestination.listToJson(listOf(first)))
+            .putString(KEY_ACTIVE_DESTINATION, first.id)
+            .remove(KEY_LEGACY_URL)
+            .remove(KEY_LEGACY_SERVER)
+            .remove(KEY_LEGACY_STREAM_KEY)
+            .apply()
     }
 
-    fun loadServer(prefs: SharedPreferences): String {
+    fun loadDestinations(prefs: SharedPreferences): List<StreamDestination> {
         migrateLegacy(prefs)
-        return prefs.getString(KEY_SERVER, StreamConfig.DEFAULT_SERVER).orEmpty()
+        return StreamDestination.listFromJson(prefs.getString(KEY_DESTINATIONS, "").orEmpty())
     }
 
-    fun loadKey(prefs: SharedPreferences): String {
-        migrateLegacy(prefs)
-        return prefs.getString(KEY_STREAM_KEY, "").orEmpty()
+    /** 保存済みIDが一覧に無ければ先頭を採用する。一覧が空なら null */
+    fun loadActiveDestinationId(prefs: SharedPreferences): String? {
+        val list = loadDestinations(prefs)
+        val saved = prefs.getString(KEY_ACTIVE_DESTINATION, null)
+        return list.firstOrNull { it.id == saved }?.id ?: list.firstOrNull()?.id
+    }
+
+    fun loadActiveDestination(prefs: SharedPreferences): StreamDestination? {
+        val id = loadActiveDestinationId(prefs) ?: return null
+        return loadDestinations(prefs).firstOrNull { it.id == id }
+    }
+
+    fun saveDestinations(prefs: SharedPreferences, list: List<StreamDestination>, activeId: String?) {
+        prefs.edit()
+            .putString(KEY_DESTINATIONS, StreamDestination.listToJson(list))
+            .putString(KEY_ACTIVE_DESTINATION, activeId)
+            .apply()
     }
 
     fun loadResIndex(prefs: SharedPreferences): Int =
@@ -65,30 +87,17 @@ object StreamPrefs {
         prefs.edit().putBoolean(KEY_PORTRAIT, portrait).apply()
     }
 
-    fun save(
-        prefs: SharedPreferences,
-        server: String,
-        key: String,
-        resIndex: Int,
-        bitrateKbps: Int,
-        fps: Int
-    ) {
+    fun saveVideo(prefs: SharedPreferences, resIndex: Int, bitrateKbps: Int, fps: Int) {
         prefs.edit()
-            .putString(KEY_SERVER, server)
-            .putString(KEY_STREAM_KEY, key)
             .putInt(KEY_RES_INDEX, resIndex)
             .putInt(KEY_BITRATE_KBPS, bitrateKbps)
             .putInt(KEY_FPS, fps)
-            .remove(KEY_LEGACY_URL) // 旧形式は移行済みなので削除
             .apply()
     }
 
-    /** サーバーURL + キー → フルURL (キーが空ならサーバーURLのみ) */
-    fun buildFullUrl(prefs: SharedPreferences): String {
-        val server = loadServer(prefs).trim().trimEnd('/')
-        val key = loadKey(prefs).trim().trim('/')
-        return if (key.isEmpty()) server else "$server/$key"
-    }
+    /** 選択中の接続先のフルURL。接続先が無ければ空文字 */
+    fun buildFullUrl(prefs: SharedPreferences): String =
+        loadActiveDestination(prefs)?.fullUrl().orEmpty()
 
     /** 現在対応しているRTMP URL規則。詳細なURL検証とは分けて扱う。 */
     fun isAcceptedRtmpUrl(url: String): Boolean = url.startsWith("rtmp://")

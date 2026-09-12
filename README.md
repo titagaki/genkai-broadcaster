@@ -22,7 +22,7 @@ Kotlin、Jetpack Compose、[RootEncoder](https://github.com/pedroSG94/RootEncode
 ## 配信設定
 
 - 配信先: RTMPサーバーURL、ストリームキー
-- 配信先プリセット: PeerCast Gateway、自宅PeerCastStationの入力例
+- 接続先を複数保存して切り替え。入力例: PeerCast Gateway、Twitch
 - 映像方向: 縦 9:16、横 16:9
 - 解像度: 360p、480p、720p、1080p
 - フレームレート: 15、24、30、60 fps
@@ -33,8 +33,8 @@ Kotlin、Jetpack Compose、[RootEncoder](https://github.com/pedroSG94/RootEncode
 
 ## 使い方
 
-1. 設定画面でRTMPサーバーURLとストリームキーを入力します。
-2. 映像方向、解像度、ビットレートを選びます。
+1. 設定 > 配信 で接続先を追加し、RTMPサーバーURLとストリームキーを入力します。複数登録して切り替えられます。
+2. 設定 > 映像 で映像方向、解像度、フレームレート、ビットレートを選びます。
 3. 受信側を接続待ち状態にします。
 4. 配信画面の開始ボタンを押します。
 

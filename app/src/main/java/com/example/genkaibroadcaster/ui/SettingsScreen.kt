@@ -5,6 +5,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -26,6 +29,8 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VerifiedUser
@@ -47,6 +52,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -62,6 +68,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -70,7 +77,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.genkaibroadcaster.streamer.DestinationPreset
 import com.example.genkaibroadcaster.streamer.RESOLUTIONS
+import com.example.genkaibroadcaster.streamer.StreamDestination
 import com.example.genkaibroadcaster.streamer.StreamConfig
 import com.example.genkaibroadcaster.streamer.StreamController
 import com.example.genkaibroadcaster.streamer.StreamPrefs
@@ -88,10 +97,11 @@ private enum class SettingsPage(val title: String, val subtitle: String, val ico
 }
 
 /**
- * 設定画面。カテゴリメニュー → 各ページの2階層。変更は端末へ自動保存する。
+ * 設定画面。カテゴリメニュー → 各ページの2階層 (配信ページだけ接続先の編集で3階層目)。
+ * 変更は端末へ自動保存する。
  *
- * 選択中のページは rememberSaveable で保持し、方向切替による Activity 再生成後も
- * 同じページに留まる。戻る操作はページ → メニュー → 配信画面の順に戻る。
+ * 選択中のページ・編集中の接続先IDは rememberSaveable で保持し、方向切替による
+ * Activity 再生成後も同じ場所に留まる。戻る操作は編集 → ページ → メニュー → 配信画面の順に戻る。
  */
 @Composable
 fun SettingsScreen(
@@ -103,11 +113,19 @@ fun SettingsScreen(
     onRequestPermissions: () -> Unit
 ) {
     var page by rememberSaveable { mutableStateOf<SettingsPage?>(null) }
-    val goBack: () -> Unit = { if (page != null) page = null else onBack() }
+    var editingId by rememberSaveable { mutableStateOf<String?>(null) }
+    val goBack: () -> Unit = {
+        when {
+            editingId != null -> editingId = null
+            page != null -> page = null
+            else -> onBack()
+        }
+    }
     BackHandler { goBack() }
 
-    var rtmpServer by remember { mutableStateOf(StreamPrefs.loadServer(prefs)) }
-    var streamKey by remember { mutableStateOf(StreamPrefs.loadKey(prefs)) }
+    var destinations by remember { mutableStateOf(StreamPrefs.loadDestinations(prefs)) }
+    var activeId by remember { mutableStateOf(StreamPrefs.loadActiveDestinationId(prefs)) }
+    val editing = destinations.firstOrNull { it.id == editingId }
     var resolutionIndex by remember { mutableIntStateOf(StreamPrefs.loadResIndex(prefs)) }
     var bitrateKbps by remember { mutableIntStateOf(StreamPrefs.loadBitrateKbps(prefs)) }
     var fps by remember { mutableIntStateOf(StreamPrefs.loadFps(prefs)) }
@@ -116,8 +134,19 @@ fun SettingsScreen(
     val isStreaming = streamState.isStreaming
     val debuggable = controller.isDebuggable()
 
-    fun persist() {
-        StreamPrefs.save(prefs, rtmpServer, streamKey, resolutionIndex, bitrateKbps, fps)
+    fun persistVideo() {
+        StreamPrefs.saveVideo(prefs, resolutionIndex, bitrateKbps, fps)
+    }
+
+    fun persistDestinations() {
+        StreamPrefs.saveDestinations(prefs, destinations, activeId)
+    }
+
+    fun addDestination(destination: StreamDestination) {
+        destinations = destinations + destination
+        if (activeId == null) activeId = destination.id
+        persistDestinations()
+        editingId = destination.id
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -128,12 +157,28 @@ fun SettingsScreen(
             ) {
                 IconButton(onClick = goBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = if (page != null) "設定メニューに戻る" else "配信画面に戻る")
+                        contentDescription = when {
+                            editing != null -> "接続先一覧に戻る"
+                            page != null -> "設定メニューに戻る"
+                            else -> "配信画面に戻る"
+                        })
                 }
                 Column(Modifier.weight(1f)) {
-                    Text(page?.title ?: "設定", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(page?.subtitle ?: "変更は自動で保存されます", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        when {
+                            editing != null -> editing.name.ifBlank { "接続先" }
+                            else -> page?.title ?: "設定"
+                        },
+                        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        when {
+                            editing != null -> "接続先の編集"
+                            else -> page?.subtitle ?: "変更は自動で保存されます"
+                        },
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
@@ -151,10 +196,14 @@ fun SettingsScreen(
                             debuggable = debuggable,
                             summaryOf = { target ->
                                 when (target) {
-                                    SettingsPage.STREAM -> listOf(
-                                        rtmpServer.ifBlank { "サーバー未設定" },
-                                        if (streamKey.isBlank()) "キー未設定" else "キー設定済み"
-                                    ).joinToString(" / ")
+                                    SettingsPage.STREAM -> {
+                                        val active = destinations.firstOrNull { it.id == activeId }
+                                        if (active == null) "接続先が未登録です"
+                                        else listOf(
+                                            active.name.ifBlank { active.server },
+                                            if (active.key.isBlank()) "キー未設定" else "キー設定済み"
+                                        ).joinToString(" / ")
+                                    }
                                     SettingsPage.VIDEO -> listOf(
                                         if (portrait) "縦" else "横",
                                         RESOLUTIONS[resolutionIndex].label,
@@ -166,23 +215,44 @@ fun SettingsScreen(
                             },
                             onSelect = { page = it }
                         )
-                        SettingsPage.STREAM -> StreamPage(
-                            rtmpServer = rtmpServer, streamKey = streamKey, showKey = showKey,
-                            enabled = !isStreaming,
-                            onServerChange = { rtmpServer = it.trim(); persist() },
-                            onKeyChange = { streamKey = it.trim(); persist() },
-                            onToggleShowKey = { showKey = !showKey }
-                        )
+                        SettingsPage.STREAM -> if (editing != null) {
+                            DestinationEditor(
+                                destination = editing,
+                                showKey = showKey,
+                                enabled = !isStreaming,
+                                canDelete = destinations.size > 1,
+                                onChange = { updated ->
+                                    destinations = destinations.map { if (it.id == updated.id) updated else it }
+                                    persistDestinations()
+                                },
+                                onToggleShowKey = { showKey = !showKey },
+                                onDelete = {
+                                    destinations = destinations.filterNot { it.id == editing.id }
+                                    if (activeId == editing.id) activeId = destinations.firstOrNull()?.id
+                                    persistDestinations()
+                                    editingId = null
+                                }
+                            )
+                        } else {
+                            DestinationList(
+                                destinations = destinations,
+                                activeId = activeId,
+                                enabled = !isStreaming,
+                                onSelect = { activeId = it; persistDestinations() },
+                                onEdit = { editingId = it },
+                                onAdd = { addDestination(it) }
+                            )
+                        }
                         SettingsPage.VIDEO -> VideoPage(
                             portrait = portrait, resolutionIndex = resolutionIndex, fps = fps, bitrateKbps = bitrateKbps,
                             isStreaming = isStreaming,
                             onPortraitChanged = onPortraitChanged,
-                            onResolutionChange = { resolutionIndex = it; persist() },
-                            onFpsChange = { fps = it; persist() },
+                            onResolutionChange = { resolutionIndex = it; persistVideo() },
+                            onFpsChange = { fps = it; persistVideo() },
                             onBitrateChange = {
                                 bitrateKbps = it
                                 if (isStreaming) controller.setVideoBitrateKbpsOnFly(bitrateKbps)
-                                persist()
+                                persistVideo()
                             }
                         )
                         SettingsPage.CAMERA -> CameraPage(
@@ -239,19 +309,91 @@ private fun SettingsMenu(
 // ---- 各ページ ----
 
 @Composable
-private fun StreamPage(
-    rtmpServer: String,
-    streamKey: String,
+private fun DestinationList(
+    destinations: List<StreamDestination>,
+    activeId: String?,
+    enabled: Boolean,
+    onSelect: (String) -> Unit,
+    onEdit: (String) -> Unit,
+    onAdd: (StreamDestination) -> Unit
+) {
+    SettingsSection("接続先", "配信に使う接続先を選びます。鉛筆で編集") {
+        if (destinations.isEmpty()) {
+            Text("接続先がありません。下の入力例から追加してください。",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Column(Modifier.fillMaxWidth().selectableGroup(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            destinations.forEach { destination ->
+                val selected = destination.id == activeId
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .selectable(selected = selected, enabled = enabled, role = Role.RadioButton,
+                            onClick = { onSelect(destination.id) })
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(selected = selected, onClick = null, enabled = enabled)
+                    Column(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                        Text(destination.name.ifBlank { "(名前なし)" }, style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            listOf(
+                                destination.server.ifBlank { "サーバー未設定" },
+                                if (destination.key.isBlank()) "キー未設定" else "キー設定済み"
+                            ).joinToString(" / "),
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    IconButton(onClick = { onEdit(destination.id) }, enabled = enabled) {
+                        Icon(Icons.Filled.Edit, contentDescription = "${destination.name} を編集")
+                    }
+                }
+            }
+        }
+    }
+    SettingsSection("接続先を追加", "入力例を選ぶとサーバーURLが入った状態で編集に入ります") {
+        DestinationPresetButtons(enabled, onAdd)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DestinationPresetButtons(enabled: Boolean, onAdd: (StreamDestination) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        DestinationPreset.entries.forEach { preset ->
+            OutlinedButton(onClick = { onAdd(preset.create()) }, enabled = enabled) { Text(preset.label) }
+        }
+        OutlinedButton(
+            onClick = { onAdd(StreamDestination(StreamDestination.newId(), "", "", "")) },
+            enabled = enabled
+        ) { Text("空の接続先") }
+    }
+}
+
+@Composable
+private fun DestinationEditor(
+    destination: StreamDestination,
     showKey: Boolean,
     enabled: Boolean,
-    onServerChange: (String) -> Unit,
-    onKeyChange: (String) -> Unit,
-    onToggleShowKey: () -> Unit
+    canDelete: Boolean,
+    onChange: (StreamDestination) -> Unit,
+    onToggleShowKey: () -> Unit,
+    onDelete: () -> Unit
 ) {
     SettingsCard {
         OutlinedTextField(
-            value = rtmpServer,
-            onValueChange = onServerChange,
+            value = destination.name,
+            onValueChange = { onChange(destination.copy(name = it)) },
+            label = { Text("名前") },
+            placeholder = { Text("例: PeerCast Gateway") },
+            singleLine = true, enabled = enabled,
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = destination.server,
+            onValueChange = { onChange(destination.copy(server = it.trim())) },
             label = { Text("RTMPサーバーURL") },
             placeholder = { Text(StreamConfig.DEFAULT_SERVER) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
@@ -259,8 +401,8 @@ private fun StreamPage(
             modifier = Modifier.fillMaxWidth()
         )
         OutlinedTextField(
-            value = streamKey,
-            onValueChange = onKeyChange,
+            value = destination.key,
+            onValueChange = { onChange(destination.copy(key = it.trim())) },
             label = { Text("ストリームキー") },
             supportingText = { Text("配信先で指定されたストリームキー") },
             visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
@@ -274,19 +416,10 @@ private fun StreamPage(
             modifier = Modifier.fillMaxWidth()
         )
     }
-    SettingsSection("入力例", "PeerCast向けのプリセット") {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = { onServerChange(StreamConfig.DEFAULT_SERVER) },
-                enabled = enabled, modifier = Modifier.weight(1f)
-            ) { Text("Gateway", maxLines = 1, overflow = TextOverflow.Ellipsis) }
-            OutlinedButton(
-                onClick = {
-                    onServerChange("rtmp://192.168.1.1/live")
-                    if (streamKey.isEmpty()) onKeyChange("livestream")
-                },
-                enabled = enabled, modifier = Modifier.weight(1f)
-            ) { Text("自宅Station例", maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    SettingsSection("削除", if (canDelete) "この接続先を一覧から消します" else "最後の接続先は削除できません") {
+        TextButton(onClick = onDelete, enabled = enabled && canDelete) {
+            Icon(Icons.Filled.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+            Text("この接続先を削除", modifier = Modifier.padding(start = 8.dp))
         }
     }
 }
@@ -369,11 +502,11 @@ private fun SetupPage(onRequestPermissions: () -> Unit) {
             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     SettingsSection("接続の準備", "配信前に受け側も準備してください") {
-        Text("Gateway", fontWeight = FontWeight.SemiBold)
+        Text("PeerCast Gateway", fontWeight = FontWeight.SemiBold)
         Text("FLVチャンネルを作成し、発行されたURLと4桁キーを入力します。",
             style = MaterialTheme.typography.bodySmall)
-        Text("自宅Station", fontWeight = FontWeight.SemiBold)
-        Text("Station側をRTMP受信待ち (SEARCHING) にしてから、このアプリで配信を開始します。",
+        Text("Twitch", fontWeight = FontWeight.SemiBold)
+        Text("クリエイターダッシュボード → 設定 → 配信 のプライマリストリームキーを入力します。",
             style = MaterialTheme.typography.bodySmall)
     }
 }

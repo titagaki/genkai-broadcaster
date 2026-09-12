@@ -22,7 +22,7 @@ Genkai Broadcasterの文書を目的別に分類しています。
 
 | 文書 | 役割 |
 |------|------|
-| [PeerCast接続ガイド](integrations/peercast.md) | 対応先の一つであるPeerCastStation／Gatewayの接続手順と互換性情報 |
+| [PeerCast接続ガイド](integrations/peercast.md) | 対応先の一つであるPeerCastStation／PeerCast Gatewayの接続手順と互換性情報 |
 
 ## UI
 

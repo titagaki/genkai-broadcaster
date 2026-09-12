@@ -50,6 +50,12 @@ object StreamConfig {
     // ---- Prefs ----
     const val PREFS_FILE = "genkai_broadcaster"
     const val DEFAULT_SERVER = "rtmp://pcgw.pgw.jp/live"
+    /** 移行時・初回起動時に作られる最初の接続先の名前 */
+    const val DEFAULT_DESTINATION_NAME = "PeerCast Gateway"
+
+    // ---- Destination presets ----
+    /** Twitch の共通インジェスト。地域別サーバーでも可 */
+    const val TWITCH_SERVER = "rtmp://live.twitch.tv/app"
 
 }
 
