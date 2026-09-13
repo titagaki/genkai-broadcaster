@@ -72,7 +72,7 @@ push配信するAndroidアプリ。
 | 項目 | 設定 | 備考 |
 |------|------|------|
 | 映像コーデック | H.264 (`VideoCodec.H264` を明示) | |
-| プロファイル | Constrained Baseline を指定 (`AVCProfileConstrainedBaseline`) | ヒント扱いで、HW エンコーダによっては constraint_set1_flag が立たず素の Baseline になる (DXVA2 非対応)。詳細は [PeerCast接続ガイド](../integrations/peercast.md) |
+| プロファイル | Constrained Baseline を指定 (`AVCProfileConstrainedBaseline`) | ヒント扱いで、HW エンコーダによっては constraint_set1_flag が立たず素の Baseline になる (DXVA2 非対応)。詳細は [視聴側プレーヤー互換性](../integrations/player-compatibility.md) |
 | エンコーダ | 互換 (既定): ソフトウェア (`CodecType.SOFTWARE`、AOSP `c2.android.avc.encoder`) / 標準: HW 優先 (`FIRST_COMPATIBLE_FOUND`) | 互換は constraint_set1_flag が確実に立ち、DXVA2 経路の PC プレーヤーで再生できる。CPU 負荷・電池消費は増える。音声エンコーダは常に `FIRST_COMPATIBLE_FOUND` |
 | Level | 解像度・FPSから自動選定 (`H264Level`) | MaxMBPS基準 (720p30→3.1、720p60→3.2、1080p30→4.0、1080p60→4.2)。過剰なLevelを付けない |
 | キーフレーム間隔 | 2秒 (`iFrameInterval=2`) | 途中参加時の復帰を早くする |
@@ -295,7 +295,7 @@ SharedPreferences `genkai_broadcaster` に保存:
 
 ## 10. 既知の注意・制約
 
-- 古いデコーダーではスマホのH.264映像を再生できない場合がある。接続先と視聴環境ごとの互換性を確認する。
+- 古いデコーダーではスマホのH.264映像を再生できない場合がある。接続先と視聴環境ごとの互換性を確認する ([視聴側プレーヤー互換性](../integrations/player-compatibility.md))。
 - 単一RTMPコネクションのため、モバイル回線の瞬断時は自動再接続までの間、受け側が切断表示になる。
 - 配信中に縦横比は変更できない。停止して方向を選び直し、再度開始する。
 - タブレットやマルチウィンドウではOSが画面方向の固定要求を無視する場合がある。送信解像度は選択設定を維持する。

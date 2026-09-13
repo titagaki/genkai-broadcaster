@@ -22,7 +22,8 @@ Genkai Broadcasterの文書を目的別に分類しています。
 
 | 文書 | 役割 |
 |------|------|
-| [PeerCast接続ガイド](integrations/peercast.md) | 対応先の一つであるPeerCastStation／PeerCast Gatewayの接続手順と互換性情報 |
+| [PeerCast接続ガイド](integrations/peercast.md) | 対応先の一つであるPeerCastStation／PeerCast Gatewayの接続手順 |
+| [視聴側プレーヤー互換性](integrations/player-compatibility.md) | ハードウェアエンコード映像が DXVA2 有効の PC プレーヤーで再生できない問題の互換表・原因・対策 |
 
 ## UI
 

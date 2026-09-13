@@ -66,6 +66,7 @@ SRT、RTSP、WHIP、端末内録画には対応していません。
 - [アーキテクチャ](docs/engineering/architecture.md)
 - [RootEncoder統合メモ](docs/engineering/rootencoder.md)
 - [PeerCast接続ガイド](docs/integrations/peercast.md)
+- [視聴側プレーヤー互換性](docs/integrations/player-compatibility.md)
 
 ## ライセンス
 
