@@ -1,8 +1,8 @@
 # コメント表示 (外部アプリ連携) 設計
 
 - 最終更新: 2026-09-13
-- 状態: 設計と I/F 定義 (AIDL) のみ。配信アプリ側の受信・描画、提供側アプリは未実装
-- 製品仕様上の位置づけ: [製品仕様](../product/spec.md) §11 の候補2。実装時に §2.1 / §6 / §9 へ移す
+- 状態: 配信アプリ側 (受信・描画・設定) は実装済み、実機確認待ち (§5)。提供側アプリは未作成
+- 製品仕様上の位置づけ: [製品仕様](../product/spec.md) F-18
 
 ## 1. 方針
 
@@ -47,13 +47,14 @@
                                               └──────────────────────────────┘
 ```
 
-配信アプリ側の新規パッケージ `comment/` (実装時):
+配信アプリ側のパッケージ `comment/`:
 
 | ファイル | 役割 |
 |---------|------|
-| `CommentEntry.kt` | AIDL で受け渡す 1 件のコメント (Parcelable)。**定義済み** |
+| `CommentEntry.kt` | AIDL で受け渡す 1 件のコメント (Parcelable 手書き) |
 | `CommentSources.kt` | `PackageManager.queryIntentServices` で提供側を列挙する。UI の設定ページが選択肢として使う |
-| `CommentSourceClient.kt` | `bindService` / `unbindService`、`ICommentListener.Stub`、メインスレッドへの配送、切断時の再 bind |
+| `CommentSourceClient.kt` | `bindService` / `unbindService`、`ICommentListener.Stub`、メインスレッドへの配送、世代管理 |
+| `CommentSourceState.kt` | UI に見せる接続状態 (`StreamState.commentSource`) |
 | `CommentBoard.kt` | 表示中コメントの一覧・期限・最大行数・重複排除 (純粋ロジック、JVM テスト対象) |
 | `CommentOverlay.kt` | `CommentBoard` の内容を出力寸法の Bitmap に描き、`ImageFilterRender` へ渡す |
 
@@ -171,25 +172,28 @@ class CommentSourceService : Service() {
 
 - `CommentSources.list(context)`: `Intent(ACTION_COMMENT_SOURCE)` で `queryIntentServices` し、
   `ComponentName` + ラベル (Service の `android:label`、無ければアプリ名) の一覧を返す。
-  Android 11+ で見えるように `AndroidManifest.xml` に `<queries><intent><action .../></intent></queries>` を宣言する (**宣言済み**)。
-- 設定: `StreamPrefs` に `comment_source` (`ComponentName.flattenToString()`、null/空 = コメント表示なし) を追加。
-  設定画面に `コメント` ページを足し、`なし` + 検出した提供側をラジオで選ぶ。配信中は変更不可。
-  提供側がアンインストールされて一覧に無い保存値は「なし」として扱う。
+  Android 11+ で見えるように `AndroidManifest.xml` に `<queries><intent><action .../></intent></queries>` を宣言している。
+- 設定: `StreamPrefs.comment_source` (`ComponentName.flattenToString()`、null/空 = コメント表示なし)。
+  設定画面の `コメント` ページで `なし` + 検出した提供側をラジオで選ぶ。配信中は変更不可。
+  提供側がアンインストールされて一覧に無い保存値は「なし」として表示し、配信開始時は「提供アプリが見つかりません」を出す。
 - 表示位置・文字サイズ・表示秒数・最大行数は v1 では固定 (`StreamConfig` に定数を置く)。設定 UI は作らない。
 
 ### 4.2 寿命 (StreamController)
 
 | タイミング | 処理 |
 |-----------|------|
-| `startStream` | 設定に提供側があれば `CommentSourceClient.bind(component)`。bind 失敗 (不在・権限なし) は通知文のみ |
-| `ICommentSource` 接続 | `getVersion()` 確認 → `registerListener`。版不一致は unbind + 通知文 |
-| `onComments` | メインスレッドで `CommentBoard.add()` → `CommentOverlay.redraw()` |
-| `stopStream` | `unregisterListener` → `unbind`。`CommentBoard.clear()`、オーバーレイを空にする |
-| `releaseEngine` | フィルタは GL 側で解放されるので、次のエンジン生成後に再設定する |
+| `startStream` (RTMP 開始要求の後) | 設定に提供側があれば `CommentSourceClient.bind()`。不在・権限なし・bind 失敗は `commentSource = Error` と通知文だけで配信は続ける |
+| `onServiceConnected` | `getVersion()` 確認 → `registerListener` → `Ready(name)`。版不一致は unbind + `Error` |
+| `onServiceDisconnected` | 提供側プロセスが落ちた。bind は残り OS が再起動するので `Connecting` にして待つ (再 bind しない) |
+| `onBindingDied` | 提供側の更新・削除。`COMMENT_REBIND_DELAY_MS` 後に bind し直す |
+| `onComments` | メインスレッドで `CommentOverlay.add()` → `CommentBoard.add()` → 描き直し |
+| `stopStream` | `unregisterListener` → `unbind`、`CommentOverlay.clear()`、`commentSource = Off` |
+| `prepareVideo` 成功 | `CommentOverlay.setOutputSize()` + 新しいフィルタを `setFilter` (§4.3) |
+| `releaseEngine` | `CommentOverlay.detachFilter()` (期限タイマーも止める) |
 
-`CommentSourceClient` はメインスレッドで扱う。AIDL コールバックは Binder スレッドで届くので、
-既存の `onMainThreadHandler` と同じ方法でメインへ移す。エンジン世代 (`generation`) の考え方と同様に、
-unbind 後に遅れて届いたコールバックは捨てる (client 側に接続世代を持つ)。
+`CommentSourceClient` はメインスレッドで扱う。AIDL コールバックは Binder スレッドで届くので `Handler(mainLooper)` で
+メインへ移す。エンジン世代 (`generation`) と同様に client 側で接続世代 (`session`) を持ち、unbind 後に遅れて
+届いたコールバックは捨てる。
 
 ### 4.3 描画 (RootEncoder のフィルタ)
 
@@ -205,24 +209,27 @@ RootEncoder 2.8.1 の実ソースで確認した範囲 (裏取り先は [rootenc
   位置合わせをスプライト側でやらず、Bitmap 上の座標で完結させる。
 - フィルタが受け取る寸法は `MainRender.initGl(context, encoderWidth, encoderHeight, ...)` の
   エンコーダ寸法 (縦配信なら 720×1280 に交換済み)。フィルタはプレビューにも配信にも同じ内容が乗る。
-- `GlStreamInterface.stop()` → `MainRender.release()` でフィルタ一覧は**空になる**。
-  本アプリは配信・プレビュー停止でエンジンを解放するので、`createStream` 後・`prepareVideo` 成功後に
-  `setFilter(overlay.filter)` を呼び直し、直後に `redraw()` でテクスチャを入れ直す。
-  `setFilter` (SET) は一覧を置き換えるので二重登録にならない (フィルタは本アプリでは 1 つだけ)。
+- `GlStreamInterface.stop()` → `MainRender.release()` でフィルタ一覧は**空になる**。GL が止まるのは
+  エンジン解放時のほか、設定変更で `prepareFromPrefs` が `stopPreview` する時。どちらも `prepareVideo` 成功が
+  続くので、そこで**新しい** `ImageFilterRender` を作って `setFilter` する (`attachCommentOverlay`)。
+  同じインスタンスを使い回さないのは、SET が既存フィルタの `release()` → 同じ位置へ `initGl()` をするため
+  (解放済みインスタンスの再初期化に頼らない)。`setFilter` (SET) は一覧を置き換えるので二重登録にならない。
 
 描画方式は **Bitmap を Canvas で描く** (`ImageFilterRender`)。`TextFilterRender` は 1 文字列しか持てず、
 `ViewSurfaceFilterRender` (VirtualDisplay に View を描く) は毎フレーム更新向きだが構成要素が多い。
 v1 は「新着時と期限切れ時だけ描き直す」静的な一覧表示なので Bitmap 方式で足りる。
 
-- 表示: 左下に最新 N 行 (新しいものが下)。白文字 + 黒縁取り (`Paint.Style.STROKE` を先に描く) で
-  背景を問わず読めるようにする。投稿者名は本文の前に薄い色で添える (null なら省略)。
-- 文字サイズは出力高さに比例 (例: 高さ / 24 px)。横配信 720p で 30px 前後。長い本文は幅で切り詰めて `…` を付ける。
-- 期限: 表示から `COMMENT_DISPLAY_MS` (例 10 秒) で消す。`CommentBoard.nextExpiryAt()` で次の期限に
+- 表示: **右下に右揃え**で最新 `COMMENT_MAX_LINES` (5) 行 (新しいものが下)。白文字 + 黒縁取り
+  (`Paint.Style.STROKE` を先に描く) で背景を問わず読めるようにする。投稿者名は本文の前に薄い黄で添える (null なら省略)。
+  左下にしなかったのは、プレビュー上の音量メーター (左下) と重なって両方読めなくなるため。
+- 文字サイズは出力高さ × `COMMENT_TEXT_HEIGHT_RATIO` (1/24)。横配信 720p で 30px。
+  長い本文は `TextUtils.ellipsize` で幅に収め、改行は空白に潰す。
+- 期限: 表示から `COMMENT_DISPLAY_MS` (10 秒) で消す。`CommentBoard.nextExpiryAt()` で次の期限に
   1 回だけメインスレッドの遅延実行を予約し、毎フレームのタイマーは持たない。
 - Bitmap は描き直すたびに新しく作る (再利用しない)。`setImage` 後に GL スレッドが読む途中で
   Canvas が同じ Bitmap を書き換える競合を避けるため。描き直しは秒単位の頻度なので割り当てコストは問題にならない。
-- 表示なし (コメント 0 件) のときも**透過 Bitmap を渡す**。`setImage(null)` は使わない:
-  `TextureLoader.load` (`encoder/.../input/gl/TextureLoader.java`) は null の要素に対して
+- 表示なし (コメント 0 件) のときは **1x1 の透過 Bitmap を渡す** (スプライトが全面に引き伸ばすので透明のまま)。
+  `setImage(null)` は使わない: `TextureLoader.load` (`encoder/.../input/gl/TextureLoader.java`) は null の要素に対して
   テクスチャ ID だけ作って `texImage2D` を飛ばすため、内容未定義のテクスチャが alpha 1 で合成される。
 - ライブラリは渡した Bitmap を `recycle()` しない (次の `setImage` まで参照を持つだけ)。こちらも recycle しない。
 
@@ -233,18 +240,20 @@ class CommentBoard(maxLines: Int, displayMillis: Long) {
     fun add(entries: List<CommentEntry>, nowMillis: Long)   // 重複 id は無視、超過分は古い順に落とす
     fun visible(nowMillis: Long): List<CommentEntry>        // 期限内を古い順で返す
     fun nextExpiryAt(nowMillis: Long): Long?                // 次に描き直すべき時刻 (無ければ null)
-    fun clear()
+    fun clear()                                             // 表示だけ消す。受け付け済み id は保持
 }
 ```
 
-テスト観点: 重複 id、最大行数超過、期限切れの境界、`nextExpiryAt` が最も早い期限を返すこと、空のときの null。
+テストは `app/src/test/.../comment/CommentBoardTest.kt`: 重複 id、最大行数超過、期限切れの境界 (期限ちょうどで消える)、
+`nextExpiryAt` が最も早い期限を返すこと、空のときの null、`clear` 後に同じ id を再表示しないこと。
+受け付け済み id は最大 500 件まで覚え、古い方から忘れる。
 
 ### 4.5 状態と UI
 
-- `StreamState` に `commentSource: CommentSourceState` (`Off` / `Connecting` / `Ready(name)` / `Error(detail)`) を追加し、
-  配信画面の情報表示 (F-09 の並び) に 1 行足す。文言は既存の `status` と同じく streamer 側で組み立てる。
-- 提供側からの `onStateChanged` は `Ready` / `Error` に写す。`detail` はそのまま通知文には流さず、
-  情報表示の行に載せる (通知文の連発を避ける)。
+- `StreamState.commentSource: CommentSourceState` (`Off` / `Connecting(name)` / `Ready(name)` / `Error(message)`)。
+  配信画面の情報表示の 3 行目に `text` を出す (`Off` は空文字で行を出さない)。文言は `CommentSourceState.text` で組み立てる。
+- 提供側からの `onStateChanged` は `READY` → `Ready`、`ERROR` → `Error(detail)`、それ以外 → `Connecting` に写す。
+  `detail` は通知文 (Toast) には流さず、情報表示の行に載せる (通知文の連発を避ける)。
 
 ## 5. 実機で確認すること (実装後)
 

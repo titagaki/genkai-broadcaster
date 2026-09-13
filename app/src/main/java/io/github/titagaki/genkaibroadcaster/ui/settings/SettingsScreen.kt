@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.Videocam
@@ -38,9 +39,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.titagaki.genkaibroadcaster.comment.CommentSources
 import io.github.titagaki.genkaibroadcaster.streamer.StreamConfig
 import io.github.titagaki.genkaibroadcaster.streamer.StreamController
 import io.github.titagaki.genkaibroadcaster.streamer.StreamDestination
@@ -53,6 +56,7 @@ import io.github.titagaki.genkaibroadcaster.streamer.StreamPrefs
 private enum class SettingsPage(val title: String, val subtitle: String, val icon: ImageVector) {
     STREAM("配信", "RTMPサーバーとストリームキー", Icons.Filled.CloudUpload),
     VIDEO("映像", "送信する映像の向きと画質", Icons.Filled.Videocam),
+    COMMENT("コメント", "映像に載せるコメントの取得元", Icons.Filled.ChatBubbleOutline),
     CAMERA("カメラ", "ズーム方式の診断 (デバッグビルド専用)", Icons.Filled.CameraAlt),
     SETUP("権限", "カメラ・マイク・通知の権限を確認", Icons.Filled.VerifiedUser)
 }
@@ -91,6 +95,10 @@ fun SettingsScreen(
     var bitrateKbps by remember { mutableIntStateOf(prefs.loadBitrateKbps()) }
     var fps by remember { mutableIntStateOf(prefs.loadFps()) }
     var softwareEncoder by remember { mutableStateOf(prefs.loadSoftwareEncoder()) }
+    var commentSourceKey by remember { mutableStateOf(prefs.loadCommentSource()) }
+    val appContext = LocalContext.current.applicationContext
+    // 提供アプリの列挙は PackageManager 問い合わせなので、設定画面を開いている間は 1 回だけ行う
+    val commentSources = remember(appContext) { CommentSources.list(appContext) }
     var showKey by remember { mutableStateOf(false) }
     val streamState by controller.state.collectAsState()
     val isStreaming = streamState.isStreaming
@@ -173,6 +181,8 @@ fun SettingsScreen(
                                         "$bitrateKbps kbps",
                                         if (softwareEncoder) "互換" else "標準"
                                     ).joinToString(" / ")
+                                    SettingsPage.COMMENT ->
+                                        commentSources.firstOrNull { it.key == commentSourceKey }?.label ?: "なし"
                                     else -> target.subtitle
                                 }
                             },
@@ -222,6 +232,12 @@ fun SettingsScreen(
                                 if (isStreaming) controller.setVideoBitrateKbpsOnFly(bitrateKbps)
                                 persistVideo()
                             }
+                        )
+                        SettingsPage.COMMENT -> CommentPage(
+                            sources = commentSources,
+                            selectedKey = commentSourceKey,
+                            enabled = !isStreaming,
+                            onSelect = { commentSourceKey = it; prefs.saveCommentSource(it) }
                         )
                         SettingsPage.CAMERA -> CameraPage(
                             current = streamState.zoom.debugOverride,

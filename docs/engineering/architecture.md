@@ -29,7 +29,13 @@ app/src/main/java/io/github/titagaki/genkaibroadcaster/
 │   ├── StreamPrefs.kt       SharedPreferences の読み書き (インスタンス)
 │   ├── StreamDestination.kt 接続先モデルとプリセット
 │   ├── Resolution.kt / H264Level.kt / LevelMeterEffect.kt
-├── comment/                 コメント提供アプリとの連携 (現状 CommentEntry のみ。設計は comment-overlay.md)
+├── comment/                 コメント提供アプリとの連携 (設計は comment-overlay.md)
+│   ├── CommentEntry.kt      AIDL で受け渡す 1 件 (Parcelable 手書き)
+│   ├── CommentSources.kt    提供アプリの列挙 (queryIntentServices)。UI の設定ページが直接使う
+│   ├── CommentSourceClient.kt bind/unbind、AIDL コールバックのメインスレッド配送、世代管理
+│   ├── CommentSourceState.kt UI が表示する接続状態 (StreamState.commentSource)
+│   ├── CommentBoard.kt      表示中一覧・期限・行数・重複排除の純粋ロジック (JVM テスト対象)
+│   └── CommentOverlay.kt    CommentBoard を Bitmap に描いて ImageFilterRender へ渡す
 ├── system/                  電池・マイクなどの端末情報 (BatteryMonitor, MicrophoneMonitor)
 └── ui/
     ├── AppRoot.kt           画面切替、通知文 (messages) の Toast 表示
@@ -39,6 +45,7 @@ app/src/main/java/io/github/titagaki/genkaibroadcaster/
     └── settings/            設定画面 (SettingsScreen と各ページ、設定画面専用の部品)
 app/src/main/aidl/.../comment/    コメント提供アプリとの AIDL 契約 (ICommentSource / ICommentListener / CommentEntry)
 app/src/test/java/.../streamer/   LensCatalog / H264Level / StreamDestination の JVM テスト
+app/src/test/java/.../comment/    CommentBoard の JVM テスト
 ```
 
 ## 層ルール
@@ -53,4 +60,7 @@ app/src/test/java/.../streamer/   LensCatalog / H264Level / StreamDestination �
   多言語化する場合は`status`を`sealed class`にし、文字列化をUI層へ移す。
 - Camera2・エンジンに依存しないロジックは`LensCatalog`のように純粋クラスへ寄せ、`app/src/test`でJVMテストする。
 - UI層からRootEncoder APIを直接呼ばない。
+- `comment/` は streamer 層から使う (bind の寿命と GL へのフィルタ登録は `StreamController`)。UI が直接触るのは
+  `CommentSources` (提供アプリの列挙、`system/` の Monitor と同じ位置づけ) と `CommentSourceState` (状態の表示) だけ。
+  `comment/` は `streamer/` を import しない (定数は `StreamController` がコンストラクタで渡す)。
 - FLV／RTMPの内部処理、独自muxer、独自エンコーダーを追加しない。

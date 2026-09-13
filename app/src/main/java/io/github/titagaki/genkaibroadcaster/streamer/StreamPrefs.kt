@@ -24,6 +24,7 @@ class StreamPrefs(context: Context) {
         private const val KEY_FPS = "video_fps"
         private const val KEY_PORTRAIT = "stream_portrait"
         private const val KEY_SOFTWARE_ENCODER = "software_encoder"
+        private const val KEY_COMMENT_SOURCE = "comment_source"
 
         /** 旧版のキー。複数接続先 (destinations) へ移行後に削除される */
         private const val KEY_LEGACY_URL = "rtmp_url"
@@ -110,6 +111,17 @@ class StreamPrefs(context: Context) {
 
     fun saveSoftwareEncoder(software: Boolean) {
         prefs.edit().putBoolean(KEY_SOFTWARE_ENCODER, software).apply()
+    }
+
+    /**
+     * コメント提供アプリ (`CommentSource.key` = ComponentName の flatten 文字列)。
+     * null はコメント表示なし。提供側が消えていても保存値はそのまま返す (存在確認は呼び出し側)。
+     */
+    fun loadCommentSource(): String? =
+        prefs.getString(KEY_COMMENT_SOURCE, null)?.ifBlank { null }
+
+    fun saveCommentSource(key: String?) {
+        prefs.edit().putString(KEY_COMMENT_SOURCE, key?.ifBlank { null }).apply()
     }
 
     fun saveVideo(resIndex: Int, bitrateKbps: Int, fps: Int) {

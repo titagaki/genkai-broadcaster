@@ -1,5 +1,7 @@
 package io.github.titagaki.genkaibroadcaster.streamer
 
+import io.github.titagaki.genkaibroadcaster.comment.CommentSourceState
+
 /** ズームの実現方式。AUTO_LENS は論理マルチカメラに倍率を渡して OS にレンズを選ばせる */
 enum class CameraZoomMode { DIGITAL, AUTO_LENS }
 
@@ -38,5 +40,7 @@ data class StreamState(
     val zoom: CameraZoomState = CameraZoomState(),
     val selectedLens: LensOption? = null,
     val cameraIsFront: Boolean = false,
-    val cameraError: String? = null
+    val cameraError: String? = null,
+    /** コメント提供アプリとの接続状態。配信中で設定があるときだけ Off 以外になる */
+    val commentSource: CommentSourceState = CommentSourceState.Off
 )

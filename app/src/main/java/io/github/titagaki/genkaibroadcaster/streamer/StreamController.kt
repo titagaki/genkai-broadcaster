@@ -24,6 +24,11 @@ import com.pedro.library.base.StreamBase
 import com.pedro.library.generic.GenericStream
 import io.github.titagaki.genkaibroadcaster.BuildConfig
 import io.github.titagaki.genkaibroadcaster.StreamService
+import io.github.titagaki.genkaibroadcaster.comment.CommentEntry
+import io.github.titagaki.genkaibroadcaster.comment.CommentOverlay
+import io.github.titagaki.genkaibroadcaster.comment.CommentSourceClient
+import io.github.titagaki.genkaibroadcaster.comment.CommentSourceState
+import io.github.titagaki.genkaibroadcaster.comment.CommentSources
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -36,6 +41,7 @@ import kotlinx.coroutines.flow.update
  * RTMP配信の中核。RootEncoder の [GenericStream] を保持し、
  * プレビュー・配信開始/停止・マイク・自動再接続を担う。
  * カメラのレンズ切替とズームは [CameraController] に委譲し、UI 向けの入口だけをここに置く。
+ * コメント表示は配信中だけ [CommentSourceClient] で提供アプリに bind し、[CommentOverlay] で映像に載せる。
  *
  * - UI層はこのクラス経由でのみ配信機能に触ること (エンコーダAPIを直接叩かない)
  * - 状態は [state] に保持し、画面の再生成後も同じ状態を購読できる
@@ -100,6 +106,25 @@ class StreamController private constructor(context: Context) {
         override fun inputPCMData(frame: Frame) = Unit
     }
 
+    /** コメントの描画。フィルタはエンジン準備のたびに作り直して GL に渡す */
+    private val commentOverlay = CommentOverlay(
+        maxLines = StreamConfig.COMMENT_MAX_LINES,
+        displayMillis = StreamConfig.COMMENT_DISPLAY_MS,
+        textHeightRatio = StreamConfig.COMMENT_TEXT_HEIGHT_RATIO
+    )
+
+    /** コメント提供アプリとの接続。配信中だけ bind する */
+    private val commentClient = CommentSourceClient(
+        appContext,
+        listener = object : CommentSourceClient.Listener {
+            override fun onComments(entries: List<CommentEntry>) = commentOverlay.add(entries)
+            override fun onStateChanged(state: CommentSourceState) {
+                mutableState.update { it.copy(commentSource = state) }
+            }
+        },
+        rebindDelayMillis = StreamConfig.COMMENT_REBIND_DELAY_MS
+    )
+
     // ---------- lifecycle ----------
 
     private fun createStream() {
@@ -141,6 +166,7 @@ class StreamController private constructor(context: Context) {
         ++generation // 古いクライアントの遅延通知を次の配信へ持ち越さない
         genericStream = null
         preparedConfig = null
+        commentOverlay.detachFilter()
         mutableState.update { it.copy(previewReady = false) }
         stopMicMonitor(stream)
         stream.release()
@@ -284,7 +310,23 @@ class StreamController private constructor(context: Context) {
             return false
         }
         preparedConfig = config
+        attachCommentOverlay(config)
         return true
+    }
+
+    /**
+     * コメント用フィルタを GL に渡す。GL は準備し直し (stopPreview) で止まるとフィルタ一覧を空にするので、
+     * 準備が成功するたびに新しいフィルタを作って `setFilter` (一覧の置き換え) で渡す。
+     * GL が未起動でもキューに積まれ、起動後の最初の描画で反映される。
+     */
+    private fun attachCommentOverlay(config: StreamPreparationConfig) {
+        val portrait = config.rotation == StreamConfig.PORTRAIT_ROTATION
+        commentOverlay.setOutputSize(
+            width = if (portrait) config.height else config.width,
+            height = if (portrait) config.width else config.height
+        )
+        runCatching { genericStream?.getGlInterface()?.setFilter(commentOverlay.attachNewFilter()) }
+            .onFailure { Log.w(TAG, "setFilter failed", it) }
     }
 
     // ---------- streaming ----------
@@ -314,7 +356,27 @@ class StreamController private constructor(context: Context) {
             Log.w(TAG, "startStream failed", e)
             stopStream("開始失敗: ${e.message}")
             postMessage("配信を開始できませんでした")
+            return
         }
+        bindCommentSource()
+    }
+
+    /** 設定にコメント提供アプリがあれば bind する。不在なら通知だけ出し、配信は続ける */
+    private fun bindCommentSource() {
+        val key = prefs.loadCommentSource() ?: return
+        val source = CommentSources.find(appContext, key)
+        if (source == null) {
+            mutableState.update { it.copy(commentSource = CommentSourceState.Error("提供アプリが見つかりません")) }
+            postMessage("コメント提供アプリが見つかりません")
+            return
+        }
+        commentClient.bind(source)
+    }
+
+    private fun unbindCommentSource() {
+        commentClient.unbind()
+        commentOverlay.clear()
+        mutableState.update { it.copy(commentSource = CommentSourceState.Off) }
     }
 
     fun stopStream(status: String = "切断") {
@@ -325,6 +387,7 @@ class StreamController private constructor(context: Context) {
                 stats = "", smoothedBitrateBps = 0L, startedAtMs = null
             )
         }
+        unbindCommentSource()
         // RTMP停止は非同期。終了したインスタンスは再利用しない。
         ++generation
         try {

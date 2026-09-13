@@ -218,6 +218,7 @@ private fun PreviewArea(
             fps = fps,
             stats = streamState.stats,
             startedAtMs = streamState.startedAtMs,
+            commentText = streamState.commentSource.text,
             modifier = Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 12.dp, end = 72.dp)
         )
         OverlayIconButton(
@@ -290,6 +291,7 @@ private fun StreamInfo(
     fps: Int,
     stats: String,
     startedAtMs: Long?,
+    commentText: String,
     modifier: Modifier = Modifier
 ) {
     var streamSeconds by remember(startedAtMs) {
@@ -332,6 +334,16 @@ private fun StreamInfo(
         if (details.isNotEmpty()) {
             Text(
                 details,
+                color = OverlayColors.secondaryText,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        // コメント提供アプリとの接続状態 (配信中で設定があるときだけ)
+        if (commentText.isNotEmpty()) {
+            Text(
+                commentText,
                 color = OverlayColors.secondaryText,
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,

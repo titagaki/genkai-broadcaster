@@ -65,6 +65,16 @@ API名に迷ったら利用中のタグ `2.8.1` の実ソースで裏を取っ�
   加工せず素通しし、PCMピークだけ記録する。本アプリは `streamer/LevelMeterEffect.kt`。
   2.8.1 の `MicrophoneManager` はミュート中 `process` を呼ばず無音バッファを渡すため、
   ピーク値が最後の値のまま残る。ControllerとUIでミュート時は 0 扱いにする。
+- 映像への合成 (フィルタ): `getGlInterface().setFilter(BaseFilterRender)` は一覧を置き換える (`addFilter` は追加)。
+  いずれもキューに積まれ GL スレッドの次の描画で反映されるので、GL 未起動でも呼べる。
+  `GlStreamInterface.stop()` (`stopPreview` で配信中でない時、`stopStream` でプレビュー中でない時) →
+  `MainRender.release()` で**フィルタ一覧は空になる**。本アプリは `prepareVideo` 成功のたびに
+  新しい `ImageFilterRender` を作って `setFilter` し直す (`StreamController.attachCommentOverlay`)。
+  フィルタが受け取る寸法はエンコーダ寸法 (縦配信なら交換済み) で、プレビューにも同じ合成結果が出る。
+- `ImageFilterRender.setImage(Bitmap?)` は参照を保持して `shouldLoad` を立てるだけで、テクスチャ化は GL スレッドの
+  次の `drawFilter`。**null を渡さない**: `TextureLoader.load` が null 要素の `texImage2D` を飛ばし、
+  内容未定義のテクスチャが alpha 1 で乗る。空にしたい時は 1x1 の透過 Bitmap を渡す。
+  ライブラリは Bitmap を `recycle()` しない。旧名 `ImageObjectFilterRender` は deprecated。
 - 配信前のマイク起動: `MicrophoneSource.start(GetMicrophoneData)` は `prepareAudio` 後なら単独で呼べる。
   稼働中に再度 `start` されるとコールバックだけ差し替えて return するので、配信開始時に
   `StreamBase.startSources()` がそのままエンコーダへ繋ぎ替える。`stopStream` → `stopSources()` で止まる。

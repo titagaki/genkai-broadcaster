@@ -68,6 +68,16 @@ object StreamConfig {
         Resolution("Full HD (1080p)", 1920, 1080),
     )
 
+    // ---- Comment overlay (docs/engineering/comment-overlay.md) ----
+    /** 映像に同時に載せる最大行数 */
+    const val COMMENT_MAX_LINES = 5
+    /** 1 件を表示し続ける時間 (ms) */
+    const val COMMENT_DISPLAY_MS = 10_000L
+    /** 出力の高さに対する文字サイズ (720p 横で 30px) */
+    const val COMMENT_TEXT_HEIGHT_RATIO = 1f / 24f
+    /** 提供側が更新・削除されて bind が切れたときに bind し直すまでの待ち (ms) */
+    const val COMMENT_REBIND_DELAY_MS = 3000L
+
     // ---- Prefs ----
     const val PREFS_FILE = "genkai_broadcaster"
     const val DEFAULT_SERVER = "rtmp://pcgw.pgw.jp/live"
