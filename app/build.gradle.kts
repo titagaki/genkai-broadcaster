@@ -69,6 +69,7 @@ android {
         compose = true
         buildConfig = true // BuildConfig.DEBUG をデバッグ専用機能の判定に使う
         resValues = true // app_name の resValue (debug のラベル切替)。AGP 9 では既定で無効
+        aidl = true // コメント提供アプリとの I/F (src/main/aidl)。AGP 8 以降は既定で無効
     }
 }
 

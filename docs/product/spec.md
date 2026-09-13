@@ -308,4 +308,5 @@ SharedPreferences `genkai_broadcaster` に保存:
 ## 11. 今後の候補 (優先度順・未確定)
 
 1. ビットレート自動調整 (帯域追従)
-2. コメント表示 (接続先・方式は未定)
+2. コメント表示 (取得は別アプリに任せ、Bound Service (AIDL) で受け取って映像に焼き込む。設計と I/F は
+   [コメント表示設計](../engineering/comment-overlay.md)。受信・描画は未実装)

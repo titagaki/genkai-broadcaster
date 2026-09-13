@@ -17,6 +17,7 @@ Genkai Broadcasterの文書を目的別に分類しています。
 | [開発環境・ビルド](engineering/development.md) | 検証済みバージョン、ビルド手順、実機確認、トラブル履歴 |
 | [RootEncoder統合メモ](engineering/rootencoder.md) | 使用API、確認済みの挙動、実装上の制約 |
 | [リファクタリング記録](engineering/refactoring.md) | 技術レビューで見つかった問題と修正内容、実機確認項目 |
+| [コメント表示設計](engineering/comment-overlay.md) | 別アプリからコメントを受け取り映像に焼き込む構成、提供側との AIDL 契約 (未実装) |
 
 ## Integrations
 

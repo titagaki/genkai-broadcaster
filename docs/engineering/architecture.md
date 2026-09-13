@@ -29,6 +29,7 @@ app/src/main/java/io/github/titagaki/genkaibroadcaster/
 │   ├── StreamPrefs.kt       SharedPreferences の読み書き (インスタンス)
 │   ├── StreamDestination.kt 接続先モデルとプリセット
 │   ├── Resolution.kt / H264Level.kt / LevelMeterEffect.kt
+├── comment/                 コメント提供アプリとの連携 (現状 CommentEntry のみ。設計は comment-overlay.md)
 ├── system/                  電池・マイクなどの端末情報 (BatteryMonitor, MicrophoneMonitor)
 └── ui/
     ├── AppRoot.kt           画面切替、通知文 (messages) の Toast 表示
@@ -36,6 +37,7 @@ app/src/main/java/io/github/titagaki/genkaibroadcaster/
     ├── StreamScreen.kt      配信画面
     ├── Components.kt        画面をまたいで使う部品
     └── settings/            設定画面 (SettingsScreen と各ページ、設定画面専用の部品)
+app/src/main/aidl/.../comment/    コメント提供アプリとの AIDL 契約 (ICommentSource / ICommentListener / CommentEntry)
 app/src/test/java/.../streamer/   LensCatalog / H264Level / StreamDestination の JVM テスト
 ```
 

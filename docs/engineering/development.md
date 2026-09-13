@@ -195,6 +195,6 @@ grep -rn "旧シンボル名" app/src
   - `android.sdk.defaultTargetSdkToCompileSdkIfUnset=true`: `targetSdk` は明示しているので影響なし。
   - `buildFeatures` の `resValues` / `aidl` が既定で無効。`resValue(...)` を書くと
     「defaultConfig contains custom resource values, but the feature is disabled」で configure が失敗するので、
-    使う機能は `buildFeatures { resValues = true }` のように明示する (2026-09-13 に有効化)。
+    使う機能は `buildFeatures { resValues = true; aidl = true }` のように明示する (2026-09-13 に両方有効化)。
 - 注意: `gradle-wrapper.jar` と `gradlew*` は 8.13 が生成したものをそのまま使っている (9.2.1 の取得・実行は可能)。
   揃えたい場合は `.\gradlew.bat wrapper --gradle-version 9.2.1` を一度実行してコミットする。
