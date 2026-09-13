@@ -1,9 +1,9 @@
-# Genkai Broadcaster 仕様書 (v0.0.1)
+# Genkai Broadcaster 仕様書 (v0.1.0)
 
 Android RTMP配信アプリの仕様定義。
 実装の基準とし、仕様変更時は本書を更新する。
 
-- 対象バージョン: v0.0.1 (`versionName`。初期リリース)
+- 対象バージョン: v0.1.0 (`versionName`。初期リリース)
 - 最終更新: 2026-09-13
 
 ## 1. 概要・目的

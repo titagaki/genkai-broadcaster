@@ -31,6 +31,19 @@ Kotlin、Jetpack Compose、[RootEncoder](https://github.com/pedroSG94/RootEncode
 
 入力した接続先、映像方向、解像度、ビットレートは端末内へ保存されます。
 
+## インストール
+
+Google Play では配布していません。署名済み APK を
+[GitHub Releases](https://github.com/titagaki/genkai-broadcaster/releases) に置いています。
+
+1. Android 端末のブラウザで Releases ページを開き、最新版の Assets から `genkai-broadcaster-vX.Y.Z.apk` をダウンロードします。
+2. ダウンロード通知またはファイルアプリから APK を開きます。
+3. 「この提供元のアプリを許可」を求められたら許可します (ブラウザやファイルアプリごとに初回のみ)。
+4. Play プロテクトの警告が出た場合は「詳細」→「インストールする」を選びます。
+5. 初回起動時にカメラ、マイク、通知 (Android 13 以降) の権限を許可します。
+
+更新するときは新しい APK を同じ手順でインストールすると上書きされ、保存した接続先や設定は引き継がれます。
+
 ## 使い方
 
 1. 設定 > 配信 で接続先を追加し、RTMPサーバーURLとストリームキーを入力します。複数登録して切り替えられます。
@@ -38,7 +51,7 @@ Kotlin、Jetpack Compose、[RootEncoder](https://github.com/pedroSG94/RootEncode
 3. 受信側を接続待ち状態にします。
 4. 配信画面の開始ボタンを押します。
 
-PeerCastStation／PeerCast Gateway固有の準備は
+PeerCast固有の準備は
 [PeerCast接続ガイド](docs/integrations/peercast.md)を参照してください。
 
 ## 対応範囲

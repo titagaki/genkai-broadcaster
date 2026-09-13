@@ -52,8 +52,13 @@ KGP も 2.4.x (AGP 〜9.3.1 対応) に上げるのが筋。別コミットで�
 ### リリース APK の作成
 
 - Build → Generate Signed Bundle / APK… → APK → release、または Build Variants を release にして Build → Build APK(s)
-- 出力: `app/build/outputs/apk/release/app-release.apk`
-- 配布は GitHub Releases にタグ (`vX.Y.Z`) を切って APK を添付する
+- 出力: `app/build/outputs/apk/release/app-release.apk`。
+  続けて `distReleaseApk` タスクが自動で走り、配布用の `app/build/outputs/dist/genkai-broadcaster-v<versionName>.apk` を作る。
+- 署名の確認: `app-release.apk` (末尾に `-unsigned` が付いていない) なら `keystore.properties` の鍵で署名されている。
+  厳密に見るなら `apksigner verify --print-certs <apk>` (build-tools 内) で証明書の CN を確認する。
+- 配布は GitHub Releases にタグ (`vX.Y.Z`) を切って `dist/` の APK を添付する (README のインストール手順とファイル名を合わせている)。
+  例: `gh release create v0.1.0 app/build/outputs/dist/genkai-broadcaster-v0.1.0.apk --title "v0.1.0" --notes-file notes.md`
+- リリースごとに `versionCode` を +1、`versionName` をタグと合わせる。
 
 ## アプリアイコン
 

@@ -23,7 +23,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "0.0.1"
+        versionName = "0.1.0"
 
         vectorDrawables {
             useSupportLibrary = true
@@ -89,3 +89,15 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
+
+// リリース APK を配布用の名前 (genkai-broadcaster-v<versionName>.apk) でコピーする。
+// assembleRelease (Android Studio の Build → Generate APKs の release も同じ) の後に自動で走る。
+// AGP 9 では旧 applicationVariants API が無く、新 API の VariantOutput にも公開の
+// outputFileName が無いため、内部クラスに触らず Copy タスクで済ませる。
+val distReleaseApk = tasks.register<Copy>("distReleaseApk") {
+    val distName = "genkai-broadcaster-v${android.defaultConfig.versionName}.apk"
+    from(layout.buildDirectory.dir("outputs/apk/release")) { include("app-release.apk") }
+    into(layout.buildDirectory.dir("outputs/dist"))
+    rename { distName }
+}
+tasks.matching { it.name == "assembleRelease" }.configureEach { finalizedBy(distReleaseApk) }
