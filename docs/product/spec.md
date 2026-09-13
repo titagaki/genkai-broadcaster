@@ -12,7 +12,7 @@ Android RTMP配信アプリの仕様定義。
 push配信するAndroidアプリ。
 
 - 用途: 任意のRTMP受信環境へのスマホ起点のライブ配信
-- 対応先の例: 一般的なRTMPサーバー、PeerCastStation、PeerCast Gateway
+- 対応先の例: 一般的なRTMPサーバー、PeerCast Gateway
 - 製品位置づけ: PeerCastでの利用を想定するが、PeerCast専用・特化にはしない
 - 方針: 余計な機能を持たせず「起動→URL/キー入力→配信開始」の最短動線に絞る
 - 非目標: SRT 配信、チャット表示、OBS連携、マルチプラットフォーム同時配信、録画保存 (対象外)
