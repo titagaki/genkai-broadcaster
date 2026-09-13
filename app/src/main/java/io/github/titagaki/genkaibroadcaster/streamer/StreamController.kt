@@ -26,6 +26,7 @@ import io.github.titagaki.genkaibroadcaster.BuildConfig
 import io.github.titagaki.genkaibroadcaster.StreamService
 import io.github.titagaki.genkaibroadcaster.comment.CommentEntry
 import io.github.titagaki.genkaibroadcaster.comment.CommentOverlay
+import io.github.titagaki.genkaibroadcaster.comment.CommentPosition
 import io.github.titagaki.genkaibroadcaster.comment.CommentSourceClient
 import io.github.titagaki.genkaibroadcaster.comment.CommentSourceState
 import io.github.titagaki.genkaibroadcaster.comment.CommentSources
@@ -110,8 +111,8 @@ class StreamController private constructor(context: Context) {
     private val commentOverlay = CommentOverlay(
         maxLines = StreamConfig.COMMENT_MAX_LINES,
         displayMillis = StreamConfig.COMMENT_DISPLAY_MS,
-        textHeightRatio = StreamConfig.COMMENT_TEXT_HEIGHT_RATIO
-    )
+        textSizeRatio = StreamConfig.COMMENT_TEXT_SIZE_RATIO
+    ).apply { setPosition(prefs.loadCommentPosition()) }
 
     /** コメント提供アプリとの接続。配信中だけ bind する */
     private val commentClient = CommentSourceClient(
@@ -372,6 +373,9 @@ class StreamController private constructor(context: Context) {
         }
         commentClient.bind(source)
     }
+
+    /** コメントの表示位置を変える。配信中でも即時反映する (保存は UI 側の StreamPrefs) */
+    fun setCommentPosition(position: CommentPosition) = commentOverlay.setPosition(position)
 
     private fun unbindCommentSource() {
         commentClient.unbind()

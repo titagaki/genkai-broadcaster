@@ -96,6 +96,7 @@ fun SettingsScreen(
     var fps by remember { mutableIntStateOf(prefs.loadFps()) }
     var softwareEncoder by remember { mutableStateOf(prefs.loadSoftwareEncoder()) }
     var commentSourceKey by remember { mutableStateOf(prefs.loadCommentSource()) }
+    var commentPosition by remember { mutableStateOf(prefs.loadCommentPosition()) }
     val appContext = LocalContext.current.applicationContext
     // 提供アプリの列挙は PackageManager 問い合わせなので、設定画面を開いている間は 1 回だけ行う
     val commentSources = remember(appContext) { CommentSources.list(appContext) }
@@ -181,8 +182,10 @@ fun SettingsScreen(
                                         "$bitrateKbps kbps",
                                         if (softwareEncoder) "互換" else "標準"
                                     ).joinToString(" / ")
-                                    SettingsPage.COMMENT ->
-                                        commentSources.firstOrNull { it.key == commentSourceKey }?.label ?: "なし"
+                                    SettingsPage.COMMENT -> listOf(
+                                        commentSources.firstOrNull { it.key == commentSourceKey }?.label ?: "なし",
+                                        "右${commentPosition.label}"
+                                    ).joinToString(" / ")
                                     else -> target.subtitle
                                 }
                             },
@@ -236,8 +239,14 @@ fun SettingsScreen(
                         SettingsPage.COMMENT -> CommentPage(
                             sources = commentSources,
                             selectedKey = commentSourceKey,
+                            position = commentPosition,
                             enabled = !isStreaming,
-                            onSelect = { commentSourceKey = it; prefs.saveCommentSource(it) }
+                            onSelect = { commentSourceKey = it; prefs.saveCommentSource(it) },
+                            onPositionChange = {
+                                commentPosition = it
+                                prefs.saveCommentPosition(it)
+                                controller.setCommentPosition(it)
+                            }
                         )
                         SettingsPage.CAMERA -> CameraPage(
                             current = streamState.zoom.debugOverride,

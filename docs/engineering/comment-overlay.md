@@ -1,7 +1,8 @@
 # コメント表示 (外部アプリ連携) 設計
 
 - 最終更新: 2026-09-13
-- 状態: 配信アプリ側 (受信・描画・設定) は実装済み、実機確認待ち (§5)。提供側アプリは未作成
+- 状態: 配信アプリ側 (受信・描画・設定) は実装済み。提供側は JPNKN Vox (`AndroidStudioProjects/JPNKNVox`、
+  `docs/spec/comment-export-spec.md`) に実装済み。両者をつないだ実機確認は未 (§5)
 - 製品仕様上の位置づけ: [製品仕様](../product/spec.md) F-18
 
 ## 1. 方針
@@ -55,6 +56,7 @@
 | `CommentSources.kt` | `PackageManager.queryIntentServices` で提供側を列挙する。UI の設定ページが選択肢として使う |
 | `CommentSourceClient.kt` | `bindService` / `unbindService`、`ICommentListener.Stub`、メインスレッドへの配送、世代管理 |
 | `CommentSourceState.kt` | UI に見せる接続状態 (`StreamState.commentSource`) |
+| `CommentPosition.kt` | 表示位置 (上/下) の enum と保存値 |
 | `CommentBoard.kt` | 表示中コメントの一覧・期限・最大行数・重複排除 (純粋ロジック、JVM テスト対象) |
 | `CommentOverlay.kt` | `CommentBoard` の内容を出力寸法の Bitmap に描き、`ImageFilterRender` へ渡す |
 
@@ -69,7 +71,6 @@ AIDL ファイルは `app/src/main/aidl/io/github/titagaki/genkaibroadcaster/com
 | 種類 | 値 |
 |------|-----|
 | Intent action (Service 検出用) | `io.github.titagaki.genkaibroadcaster.comment.action.COMMENT_SOURCE` |
-| 権限 (bind に必要、提供側が宣言) | `io.github.titagaki.genkaibroadcaster.permission.BIND_COMMENT_SOURCE` |
 | AIDL パッケージ | `io.github.titagaki.genkaibroadcaster.comment` |
 | プロトコル版 | `ICommentSource.VERSION` (現在 1) |
 
@@ -109,28 +110,27 @@ AIDL ファイルは `app/src/main/aidl/io/github/titagaki/genkaibroadcaster/com
 - `registerListener` 後に届いたコメントだけを送る。過去分の再送はしない (bind 直後に古いコメントで画面が埋まるのを避ける)。
 - 提供側の取得処理 (ポーリング周期、認証、再接続) は提供側が決める。配信アプリは関与しない。
   提供側が bind 中だけ取得を動かすか常時動かすかも提供側の自由。
-- 提供側の Service は `android:exported="true"` + `android:permission` (上記 `BIND_COMMENT_SOURCE`) で保護する。
-  権限は提供側が `protectionLevel="signature"` で宣言し、配信アプリは `<uses-permission>` で要求する。
-  同じ鍵で署名したアプリ同士だけが繋がる (release は release 鍵、debug は debug 鍵で組を作る)。
+- 提供側の Service は `android:exported="true"` で公開し、**権限では守らない**。
+  当初は提供側が `signature` 権限を宣言し本アプリが `uses-permission` する想定だったが、
+  本アプリと JPNKN Vox は署名鍵が別なので `signature` は使えず (鍵を揃えると既存インストールの更新ができなくなる)、
+  `normal` の自前権限は定義側 (提供側) が本アプリより後にインストールされると付与されず
+  `SecurityException: Not allowed to bind to service` になった (2026-09-13 実機で確認)。
+  渡すのは公開掲示板・チャットのコメントだけで、提供側への書き込みの口は無いので保護なしで足りると判断した。
+  守りたい提供側は自分で `Binder.getCallingUid()` から呼び出し元を検査すればよい。
 - 版の扱い: 非互換な変更 (メソッドの引数変更、`CommentEntry` のフィールド変更) は `VERSION` を上げる。
   `CommentEntry` の Parcel 形式は末尾追加でも旧読み手が壊れるため、フィールド追加も非互換扱い。
 - 配信アプリは提供側の停止 (`onServiceDisconnected` / `binderDied`) を受けたら、配信中なら
   数秒間隔で再 bind を試み、通知文 (`StreamController.messages`) で知らせる。
-  提供側が居ない・権限が無い・版が違う場合は配信自体は止めず、コメントなしで続行する。
+  提供側が居ない・版が違う場合は配信自体は止めず、コメントなしで続行する。
 
 ### 3.4 提供側の最小実装 (参考)
 
 `AndroidManifest.xml`:
 
 ```xml
-<permission
-    android:name="io.github.titagaki.genkaibroadcaster.permission.BIND_COMMENT_SOURCE"
-    android:protectionLevel="signature" />
-
 <service
     android:name=".CommentSourceService"
-    android:exported="true"
-    android:permission="io.github.titagaki.genkaibroadcaster.permission.BIND_COMMENT_SOURCE">
+    android:exported="true">
     <intent-filter>
         <action android:name="io.github.titagaki.genkaibroadcaster.comment.action.COMMENT_SOURCE" />
     </intent-filter>
@@ -176,13 +176,15 @@ class CommentSourceService : Service() {
 - 設定: `StreamPrefs.comment_source` (`ComponentName.flattenToString()`、null/空 = コメント表示なし)。
   設定画面の `コメント` ページで `なし` + 検出した提供側をラジオで選ぶ。配信中は変更不可。
   提供側がアンインストールされて一覧に無い保存値は「なし」として表示し、配信開始時は「提供アプリが見つかりません」を出す。
-- 表示位置・文字サイズ・表示秒数・最大行数は v1 では固定 (`StreamConfig` に定数を置く)。設定 UI は作らない。
+- 表示位置は `StreamPrefs.comment_position` (`bottom` / `top`、既定 bottom) で上下だけ選べる。配信中も
+  `StreamController.setCommentPosition()` で即時反映する (描き直すだけで GL には触らない)。
+  文字サイズ・表示秒数・最大行数は固定 (`StreamConfig` に定数を置く)。
 
 ### 4.2 寿命 (StreamController)
 
 | タイミング | 処理 |
 |-----------|------|
-| `startStream` (RTMP 開始要求の後) | 設定に提供側があれば `CommentSourceClient.bind()`。不在・権限なし・bind 失敗は `commentSource = Error` と通知文だけで配信は続ける |
+| `startStream` (RTMP 開始要求の後) | 設定に提供側があれば `CommentSourceClient.bind()`。不在・bind 失敗は `commentSource = Error` と通知文だけで配信は続ける |
 | `onServiceConnected` | `getVersion()` 確認 → `registerListener` → `Ready(name)`。版不一致は unbind + `Error` |
 | `onServiceDisconnected` | 提供側プロセスが落ちた。bind は残り OS が再起動するので `Connecting` にして待つ (再 bind しない) |
 | `onBindingDied` | 提供側の更新・削除。`COMMENT_REBIND_DELAY_MS` 後に bind し直す |
@@ -219,10 +221,12 @@ RootEncoder 2.8.1 の実ソースで確認した範囲 (裏取り先は [rootenc
 `ViewSurfaceFilterRender` (VirtualDisplay に View を描く) は毎フレーム更新向きだが構成要素が多い。
 v1 は「新着時と期限切れ時だけ描き直す」静的な一覧表示なので Bitmap 方式で足りる。
 
-- 表示: **右下に右揃え**で最新 `COMMENT_MAX_LINES` (5) 行 (新しいものが下)。白文字 + 黒縁取り
-  (`Paint.Style.STROKE` を先に描く) で背景を問わず読めるようにする。投稿者名は本文の前に薄い黄で添える (null なら省略)。
-  左下にしなかったのは、プレビュー上の音量メーター (左下) と重なって両方読めなくなるため。
-- 文字サイズは出力高さ × `COMMENT_TEXT_HEIGHT_RATIO` (1/24)。横配信 720p で 30px。
+- 表示: **右揃え**で最新 `COMMENT_MAX_LINES` (5) 行。上下は `CommentPosition` で選び、どちらでも新しいものが下
+  (下寄せは下端から古い方へ、上寄せは上端から新しい方へ描く)。白文字 + 黒縁取り
+  (`Paint.Style.STROKE` を先に描く) で背景を問わず読めるようにする。投稿者名は本文の前に薄い黄で添える
+  (null なら省略。幅の 4 割で省略)。左寄せにしないのは、プレビュー上の音量メーター (左下) と重なって両方読めなくなるため。
+- 文字サイズは出力の**短辺** × `COMMENT_TEXT_SIZE_RATIO` (1/24)。720p なら縦横どちらも 30px。
+  高さ基準にしていた当初は縦配信 (720×1280) で 53px になり、幅 720 に十数文字しか入らず読めなかった (2026-09-13 実機)。
   長い本文は `TextUtils.ellipsize` で幅に収め、改行は空白に潰す。
 - 期限: 表示から `COMMENT_DISPLAY_MS` (10 秒) で消す。`CommentBoard.nextExpiryAt()` で次の期限に
   1 回だけメインスレッドの遅延実行を予約し、毎フレームのタイマーは持たない。
@@ -257,9 +261,7 @@ class CommentBoard(maxLines: Int, displayMillis: Long) {
 
 ## 5. 実機で確認すること (実装後)
 
-- `<queries>` 宣言だけで debug / release 両方の提供側が列挙されること (Android 11+)。
-- 提供側を**後から**インストールしても `BIND_COMMENT_SOURCE` が配信アプリに付与されること
-  (署名一致のカスタム権限は定義側が後入れでも再評価されるはずだが未確認)。
+- `<queries>` 宣言だけで debug / release 両方の提供側が列挙されること (Android 11+)。→ 2026-09-13 debug 同士で確認済み。
 - 縦配信でフィルタの Bitmap が出力寸法 (720×1280) に一致し、上下左右が正しいこと。
 - 配信中に提供側を強制終了 → 再 bind で復帰すること。配信は途切れないこと。
 - ソフトウェアエンコーダ + フィルタ有効時の CPU 負荷 (フィルタは GL 上の合成なのでエンコーダ負荷は変わらない見込み)。

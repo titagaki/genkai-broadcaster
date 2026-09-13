@@ -2,6 +2,7 @@ package io.github.titagaki.genkaibroadcaster.streamer
 
 import android.content.Context
 import android.content.SharedPreferences
+import io.github.titagaki.genkaibroadcaster.comment.CommentPosition
 
 /**
  * 配信設定の SharedPreferences 読み書きを集約する。
@@ -25,6 +26,7 @@ class StreamPrefs(context: Context) {
         private const val KEY_PORTRAIT = "stream_portrait"
         private const val KEY_SOFTWARE_ENCODER = "software_encoder"
         private const val KEY_COMMENT_SOURCE = "comment_source"
+        private const val KEY_COMMENT_POSITION = "comment_position"
 
         /** 旧版のキー。複数接続先 (destinations) へ移行後に削除される */
         private const val KEY_LEGACY_URL = "rtmp_url"
@@ -122,6 +124,14 @@ class StreamPrefs(context: Context) {
 
     fun saveCommentSource(key: String?) {
         prefs.edit().putString(KEY_COMMENT_SOURCE, key?.ifBlank { null }).apply()
+    }
+
+    /** コメントの表示位置。未知の値・未設定は下 */
+    fun loadCommentPosition(): CommentPosition =
+        CommentPosition.fromId(prefs.getString(KEY_COMMENT_POSITION, null))
+
+    fun saveCommentPosition(position: CommentPosition) {
+        prefs.edit().putString(KEY_COMMENT_POSITION, position.id).apply()
     }
 
     fun saveVideo(resIndex: Int, bitrateKbps: Int, fps: Int) {

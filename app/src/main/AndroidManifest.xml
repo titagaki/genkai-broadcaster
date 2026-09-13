@@ -11,10 +11,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- コメント提供アプリの Service へ bind するための権限 (提供側が signature で宣言する)。
-         提供側が未インストールなら未知の権限として無視される -->
-    <uses-permission android:name="io.github.titagaki.genkaibroadcaster.permission.BIND_COMMENT_SOURCE" />
-
     <!-- Android 11+ でコメント提供アプリの Service を queryIntentServices で列挙するための可視性宣言 -->
     <queries>
         <intent>

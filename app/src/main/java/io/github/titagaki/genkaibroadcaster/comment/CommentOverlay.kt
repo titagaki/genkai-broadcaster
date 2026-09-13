@@ -21,14 +21,14 @@ import com.pedro.encoder.input.gl.render.filters.`object`.ImageFilterRender
  *   (`TextureLoader.load` が null 要素の texImage2D を飛ばす)
  * - フィルタは GL の stop で解放されるので、[attachNewFilter] でエンジン準備のたびに作り直す
  *
- * 表示は右下に右揃えで最新 [maxLines] 行 (新しいものが下)。白文字 + 黒縁取り。
- * 右下にしたのはプレビュー上の音量メーター (左下) と重ねないため。
+ * 表示は右揃えで最新 [maxLines] 行 (新しいものが下)。白文字 + 黒縁取り。上下は [position] で選ぶ。
+ * 左寄せにしないのはプレビュー上の音量メーター (左下) と重ねないため。
  */
 class CommentOverlay(
     maxLines: Int,
     displayMillis: Long,
-    /** 出力の高さに対する文字サイズの比 (例 1/24) */
-    private val textHeightRatio: Float
+    /** 出力の短辺に対する文字サイズの比 (例 1/24)。縦横で同じ大きさにするため高さではなく短辺を使う */
+    private val textSizeRatio: Float
 ) {
     private val board = CommentBoard(maxLines, displayMillis)
     private val handler = Handler(Looper.getMainLooper())
@@ -37,12 +37,20 @@ class CommentOverlay(
     private var width = 0
     private var height = 0
     private var filter: ImageFilterRender? = null
+    private var position = CommentPosition.BOTTOM
 
     /** 配信・プレビューの出力寸法 (縦配信なら縦長の値) を設定する */
     fun setOutputSize(width: Int, height: Int) {
         if (this.width == width && this.height == height) return
         this.width = width
         this.height = height
+        redraw()
+    }
+
+    /** 表示位置を変える。配信中でも即座に描き直す */
+    fun setPosition(position: CommentPosition) {
+        if (this.position == position) return
+        this.position = position
         redraw()
     }
 
@@ -91,7 +99,7 @@ class CommentOverlay(
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         bitmap.eraseColor(Color.TRANSPARENT)
         val canvas = Canvas(bitmap)
-        val textSize = height * textHeightRatio
+        val textSize = minOf(width, height) * textSizeRatio
         val margin = textSize * 0.5f
         val lineHeight = textSize * 1.25f
         val maxWidth = width - margin * 2
@@ -109,11 +117,18 @@ class CommentOverlay(
             color = Color.BLACK
         }
 
-        // 下から上へ、新しいものを一番下に置く
-        var baseline = height - margin - fill.fontMetrics.descent
-        for (entry in entries.asReversed()) {
+        // どちらの位置でも新しいものが一番下。下寄せは下端から古い方へ、上寄せは上端から新しい方へ描く
+        val metrics = fill.fontMetrics
+        val bottomUp = position == CommentPosition.BOTTOM
+        var baseline = if (bottomUp) height - margin - metrics.descent else margin - metrics.ascent
+        val step = if (bottomUp) -lineHeight else lineHeight
+        val ordered = if (bottomUp) entries.asReversed() else entries
+        for (entry in ordered) {
             val author = entry.author?.trim().orEmpty()
-            val authorText = if (author.isEmpty()) "" else "$author: "
+            // 長い投稿者名で本文が消えないよう、名前は幅の 4 割までに収める
+            val authorText = if (author.isEmpty()) "" else {
+                TextUtils.ellipsize(author, fill, maxWidth * 0.4f, TextUtils.TruncateAt.END).toString() + ": "
+            }
             val authorWidth = fill.measureText(authorText)
             val body = TextUtils.ellipsize(
                 oneLine(entry.body), fill, (maxWidth - authorWidth).coerceAtLeast(0f), TextUtils.TruncateAt.END
@@ -126,7 +141,7 @@ class CommentOverlay(
             }
             canvas.drawText(body, x + authorWidth, baseline, stroke)
             canvas.drawText(body, x + authorWidth, baseline, fill)
-            baseline -= lineHeight
+            baseline += step
         }
         return bitmap
     }

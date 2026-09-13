@@ -1,5 +1,5 @@
 // 提供側 (コメント取得アプリ) が Service として公開し、配信アプリが配信中だけ bind して使う。
-// 検出用 action と bind に必要な権限の名前は docs/engineering/comment-overlay.md §3.1 を参照。
+// 検出用 action 名は docs/engineering/comment-overlay.md §3.1 を参照 (bind に権限は要らない)。
 package io.github.titagaki.genkaibroadcaster.comment;
 
 import io.github.titagaki.genkaibroadcaster.comment.ICommentListener;

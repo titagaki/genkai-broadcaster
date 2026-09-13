@@ -24,6 +24,7 @@ Genkai Broadcasterの文書を目的別に分類しています。
 | 文書 | 役割 |
 |------|------|
 | [PeerCast接続ガイド](integrations/peercast.md) | 対応先の一つであるPeerCastStation／PeerCast Gatewayの接続手順 |
+| [JPNKN Vox 連携ガイド](integrations/jpnkn-vox.md) | コメント提供アプリ JPNKN Vox と組み合わせて配信映像にコメントを表示する手順 |
 | [視聴側プレーヤー互換性](integrations/player-compatibility.md) | ハードウェアエンコード映像が DXVA2 有効の PC プレーヤーで再生できない問題の互換表・原因・対策 |
 
 ## UI

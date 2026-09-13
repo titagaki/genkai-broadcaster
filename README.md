@@ -18,6 +18,7 @@ Kotlin、Jetpack Compose、[RootEncoder](https://github.com/pedroSG94/RootEncode
 - 入力音量、電池残量、接続状態、配信時間、送信ビットレートの表示
 - 切断時の自動再接続
 - Foreground Serviceによるバックグラウンド配信と通知からの停止
+- [JPNKN Vox](https://github.com/titagaki/jpnkn-vox) から受け取ったコメントの配信映像への表示
 
 ## 配信設定
 
@@ -79,6 +80,7 @@ SRT、RTSP、WHIP、端末内録画には対応していません。
 - [アーキテクチャ](docs/engineering/architecture.md)
 - [RootEncoder統合メモ](docs/engineering/rootencoder.md)
 - [PeerCast接続ガイド](docs/integrations/peercast.md)
+- [JPNKN Vox 連携ガイド](docs/integrations/jpnkn-vox.md)
 - [視聴側プレーヤー互換性](docs/integrations/player-compatibility.md)
 
 ## ライセンス
