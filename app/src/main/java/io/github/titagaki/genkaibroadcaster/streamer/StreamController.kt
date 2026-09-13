@@ -302,7 +302,10 @@ class StreamController private constructor(context: Context) {
         if (!prepareFromPrefs()) return
         if (resumePreview) startPreparedPreviewIfReady()
         mutableState.update {
-            it.copy(isStreaming = true, isConnected = false, status = "接続中...", stats = "", startedAtMs = null)
+            it.copy(
+                isStreaming = true, isConnected = false, status = "接続中...",
+                stats = "", smoothedBitrateBps = 0L, startedAtMs = null
+            )
         }
         try {
             StreamService.start(appContext, generation)
@@ -317,7 +320,10 @@ class StreamController private constructor(context: Context) {
     fun stopStream(status: String = "切断") {
         if (!isStreamingNow()) return
         mutableState.update {
-            it.copy(isStreaming = false, isConnected = false, status = status, stats = "", startedAtMs = null)
+            it.copy(
+                isStreaming = false, isConnected = false, status = status,
+                stats = "", smoothedBitrateBps = 0L, startedAtMs = null
+            )
         }
         // RTMP停止は非同期。終了したインスタンスは再利用しない。
         ++generation
@@ -427,7 +433,7 @@ class StreamController private constructor(context: Context) {
     }
 
     private fun connectionFailed(reason: String) {
-        mutableState.update { it.copy(isConnected = false, stats = "") }
+        mutableState.update { it.copy(isConnected = false, stats = "", smoothedBitrateBps = 0L) }
         val retrying = genericStream?.getStreamClient()
             ?.reTry(StreamConfig.RETRY_DELAY_MS, reason, null) == true
         if (retrying) {
@@ -443,10 +449,8 @@ class StreamController private constructor(context: Context) {
         if (state.value.isConnected && report.throughput != Throughput.UNKNOWN) {
             mutableState.update {
                 it.copy(
-                    stats = "%.1f Mbps [%s]".format(
-                        report.smoothedBitrate / 1_000_000f,
-                        report.throughput.name.lowercase()
-                    )
+                    stats = "${StreamFormat.mbps(report.smoothedBitrate)} Mbps [${report.throughput.name.lowercase()}]",
+                    smoothedBitrateBps = report.smoothedBitrate
                 )
             }
         }

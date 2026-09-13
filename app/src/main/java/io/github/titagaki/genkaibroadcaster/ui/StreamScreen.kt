@@ -64,6 +64,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import io.github.titagaki.genkaibroadcaster.streamer.CameraZoomChoice
 import io.github.titagaki.genkaibroadcaster.streamer.CameraZoomState
 import io.github.titagaki.genkaibroadcaster.streamer.StreamController
+import io.github.titagaki.genkaibroadcaster.streamer.StreamFormat
 import io.github.titagaki.genkaibroadcaster.streamer.StreamPrefs
 import io.github.titagaki.genkaibroadcaster.streamer.StreamState
 import io.github.titagaki.genkaibroadcaster.system.BatteryMonitor
@@ -103,8 +104,11 @@ fun StreamScreen(
             controller.stopStream()
         } else {
             val url = prefs.buildFullUrl()
-            if (StreamPrefs.isAcceptedRtmpUrl(url)) controller.startStream(url)
-            else urlError = "配信先URLが不正です"
+            urlError = when {
+                StreamPrefs.isAcceptedRtmpUrl(url) -> { controller.startStream(url); null }
+                url.isEmpty() -> "接続先が未登録です。設定から追加してください"
+                else -> "配信先URLが不正です"
+            }
         }
     }
 
@@ -308,14 +312,7 @@ private fun StreamInfo(
         }
     }
     val details = buildList {
-        if (startedAtMs != null) {
-            val hours = streamSeconds / 3600
-            val minutes = streamSeconds / 60 % 60
-            add(
-                if (hours > 0) "%02d:%02d:%02d".format(hours, minutes, streamSeconds % 60)
-                else "%02d:%02d".format(minutes, streamSeconds % 60)
-            )
-        }
+        if (startedAtMs != null) add(StreamFormat.elapsed(streamSeconds))
         if (stats.isNotEmpty()) add(stats)
         if (battery.percent >= 0) add("${battery.percent}%${if (battery.isCharging) " 充電中" else ""}")
     }.joinToString(" / ")

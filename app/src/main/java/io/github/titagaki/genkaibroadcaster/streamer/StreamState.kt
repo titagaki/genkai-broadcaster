@@ -30,6 +30,8 @@ data class StreamState(
     val isConnected: Boolean = false,
     val status: String = "待機中",
     val stats: String = "",
+    /** 平滑化した送信ビットレート (bps)。[stats] と同じ条件で更新し、未計測・切断時は 0 */
+    val smoothedBitrateBps: Long = 0L,
     val muted: Boolean = false,
     val previewReady: Boolean = false,
     val startedAtMs: Long? = null,

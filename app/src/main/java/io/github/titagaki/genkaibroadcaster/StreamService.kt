@@ -8,18 +8,33 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import io.github.titagaki.genkaibroadcaster.streamer.StreamController
+import io.github.titagaki.genkaibroadcaster.streamer.StreamFormat
+import io.github.titagaki.genkaibroadcaster.streamer.StreamState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /**
  * 配信中にプロセスを生かしておくための Foreground Service。
  * エンジンはプロセス共有の [StreamController] が持ち、Activity の生死とは独立に動く。
  * 通知の「停止」は同じ Controller を止めてから Service を消す。
+ * 通知本文は配信画面の詳細行と同じ経過時間・送信ビットレートを毎秒更新して出す。
  */
 class StreamService : Service() {
 
     /** 開始時に受け取った Controller の世代。onDestroy で古い世代の停止要求を無視するため */
     private var session = -1
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var updateJob: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -37,10 +52,13 @@ class StreamService : Service() {
             }
             else -> {
                 session = intent?.getIntExtra(EXTRA_SESSION, -1) ?: -1
-                startForeground(NOTIFICATION_ID, buildNotification())
-                if (!StreamController.getInstance(this).isStreamingNow()) {
+                val controller = StreamController.getInstance(this)
+                startForeground(NOTIFICATION_ID, buildNotification(notificationText(controller.state.value)))
+                if (!controller.isStreamingNow()) {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
+                } else {
+                    startUpdating(controller)
                 }
             }
         }
@@ -48,8 +66,30 @@ class StreamService : Service() {
     }
 
     override fun onDestroy() {
+        scope.cancel()
         StreamController.getInstance(this).onServiceDestroyed(session)
         super.onDestroy()
+    }
+
+    /** 経過時間は状態の変化なしに進むので、毎秒読み直して文面が変わった時だけ通知を差し替える */
+    private fun startUpdating(controller: StreamController) {
+        updateJob?.cancel()
+        updateJob = scope.launch {
+            var shown: String? = null
+            while (isActive) {
+                val text = notificationText(controller.state.value)
+                if (text != shown) {
+                    shown = text
+                    getSystemService(NotificationManager::class.java)?.notify(NOTIFICATION_ID, buildNotification(text))
+                }
+                delay(1000)
+            }
+        }
+    }
+
+    private fun notificationText(state: StreamState): String {
+        val elapsedSeconds = state.startedAtMs?.let { (SystemClock.elapsedRealtime() - it) / 1000 } ?: 0L
+        return StreamFormat.notificationText(state, elapsedSeconds)
     }
 
     private fun createChannel() {
@@ -60,7 +100,7 @@ class StreamService : Service() {
         getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
     }
 
-    private fun buildNotification(): Notification {
+    private fun buildNotification(contentText: String): Notification {
         val openApp = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java),
@@ -72,12 +112,13 @@ class StreamService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Genkai Broadcaster")
-            .setContentText("RTMP配信処理中 (接続・再接続を含む)。タップでアプリに戻る")
+            // アプリ名は OS がヘッダーに出すのでタイトルは置かず、状態文を本文 (細字) に出す
+            .setContentText(contentText)
             .setSmallIcon(R.drawable.ic_notification_stream)
             .setContentIntent(openApp)
             .addAction(R.drawable.ic_notification_stop, "停止", stopIntent)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .build()
     }
 

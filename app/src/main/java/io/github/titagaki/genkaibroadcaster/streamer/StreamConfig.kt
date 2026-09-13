@@ -51,7 +51,8 @@ object StreamConfig {
     const val BITRATE_MAX_KBPS = 10000
     /** −/+ ボタン1回で増減する量 */
     const val BITRATE_STEP_KBPS = 100
-    const val DEFAULT_BITRATE_KBPS = 3000
+    /** 720p30 の H.264 Baseline で実用画質が出る下限寄り。PeerCast のリレー帯域に収まる値 */
+    const val DEFAULT_BITRATE_KBPS = 1200
 
     // ---- Resolution ----
     const val DEFAULT_RES_INDEX = 2 // 720p

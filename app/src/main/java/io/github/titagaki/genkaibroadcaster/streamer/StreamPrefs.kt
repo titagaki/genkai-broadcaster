@@ -36,22 +36,27 @@ class StreamPrefs(context: Context) {
 
     /**
      * 旧版 (単一の rtmp_url、または rtmp_server + stream_key) から複数接続先へ移行する。
-     * destinations が無い場合だけ実行し、旧値を1件目の接続先として取り込む。
+     * destinations が無い場合だけ実行し、旧値があればそれを1件目の接続先として取り込む。
+     * 旧値も無い初回起動では接続先を空で始める (ユーザーが設定画面の入力例から追加する)。
      */
     private fun migrateLegacy() {
         if (prefs.contains(KEY_DESTINATIONS)) return
 
-        val legacyUrl = prefs.getString(KEY_LEGACY_URL, "").orEmpty()
-        val server = prefs.getString(KEY_LEGACY_SERVER, null)
-            ?: legacyUrl.substringBeforeLast("/", "").ifEmpty { StreamConfig.DEFAULT_SERVER }
-        val key = prefs.getString(KEY_LEGACY_STREAM_KEY, null)
-            ?: legacyUrl.substringAfterLast("/", "")
-        val first = StreamDestination(
-            StreamDestination.newId(), StreamConfig.DEFAULT_DESTINATION_NAME, server, key
-        )
+        val hasLegacy = prefs.contains(KEY_LEGACY_URL) || prefs.contains(KEY_LEGACY_SERVER) ||
+            prefs.contains(KEY_LEGACY_STREAM_KEY)
+        val list = if (hasLegacy) {
+            val legacyUrl = prefs.getString(KEY_LEGACY_URL, "").orEmpty()
+            val server = prefs.getString(KEY_LEGACY_SERVER, null)
+                ?: legacyUrl.substringBeforeLast("/", "")
+            val key = prefs.getString(KEY_LEGACY_STREAM_KEY, null)
+                ?: legacyUrl.substringAfterLast("/", "")
+            listOf(StreamDestination(StreamDestination.newId(), StreamConfig.DEFAULT_DESTINATION_NAME, server, key))
+        } else {
+            emptyList()
+        }
         prefs.edit()
-            .putString(KEY_DESTINATIONS, StreamDestination.listToJson(listOf(first)))
-            .putString(KEY_ACTIVE_DESTINATION, first.id)
+            .putString(KEY_DESTINATIONS, StreamDestination.listToJson(list))
+            .putString(KEY_ACTIVE_DESTINATION, list.firstOrNull()?.id)
             .remove(KEY_LEGACY_URL)
             .remove(KEY_LEGACY_SERVER)
             .remove(KEY_LEGACY_STREAM_KEY)
