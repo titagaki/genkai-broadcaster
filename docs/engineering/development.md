@@ -45,13 +45,15 @@ KGP も 2.4.x (AGP 〜9.3.1 対応) に上げるのが筋。別コミットで�
 
 ### 鍵の作成 (初回のみ、Android Studio)
 
-1. Build → Generate Signed Bundle / APK… → APK → Next
+1. Build → Generate Signed App Bundle or APK… → APK → Next
 2. Key store path の「Create new…」で保存先 (リポジトリ外)・パスワード・エイリアス・有効期限 (25年以上) を入力
 3. 作成した値を `keystore.properties` に書く
 
 ### リリース APK の作成
 
-- Build → Generate Signed Bundle / APK… → APK → release、または Build Variants を release にして Build → Build APK(s)
+- Build → Select Build Variant… で `app` を release にし、Build → Generate App Bundles or APKs → Generate APKs
+  (`keystore.properties` があれば署名される)。終わったら Build Variant を debug に戻す (戻し忘れるとデバッグ用ページが出ない)。
+  Build → Generate Signed App Bundle or APK… のウィザードでも可 (鍵情報を都度入力、出力は `app/release/`)。
 - 出力: `app/build/outputs/apk/release/app-release.apk`。
   続けて `distReleaseApk` タスクが自動で走り、配布用の `app/build/outputs/dist/genkai-broadcaster-v<versionName>.apk` を作る。
 - 署名の確認: `app-release.apk` (末尾に `-unsigned` が付いていない) なら `keystore.properties` の鍵で署名されている。
