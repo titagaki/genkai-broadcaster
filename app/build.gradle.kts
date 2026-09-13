@@ -28,6 +28,8 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+        // 起動アイコンのラベル。debug ではビルドタイプ側で上書きして見分ける
+        resValue("string", "app_name", "Genkai Broadcaster")
     }
 
     signingConfigs {
@@ -42,6 +44,13 @@ android {
     }
 
     buildTypes {
+        // release 版と別アプリとして共存させる (同じ applicationId だと署名鍵が違うため上書きできない)。
+        // 設定 (SharedPreferences) も分かれる。
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            resValue("string", "app_name", "Genkai Broadcaster (debug)")
+        }
         release {
             signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
@@ -59,6 +68,7 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true // BuildConfig.DEBUG をデバッグ専用機能の判定に使う
+        resValues = true // app_name の resValue (debug のラベル切替)。AGP 9 では既定で無効
     }
 }
 

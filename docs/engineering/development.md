@@ -42,6 +42,9 @@ KGP も 2.4.x (AGP 〜9.3.1 対応) に上げるのが筋。別コミットで�
 - 鍵ファイル (`*.jks`) はリポジトリ外 (例: `C:/Users/<name>/keys/`) に置き、`storeFile` に絶対パスを書く。
   `*.jks` `*.keystore` `keystore.properties` は `.gitignore` 済み。
 - **鍵を失うと同じ applicationId で更新版を配布できなくなる** (利用者は再インストールが必要)。鍵とパスワードは必ずバックアップする。
+- debug ビルドは `applicationIdSuffix = ".debug"` で別アプリ (`io.github.titagaki.genkaibroadcaster.debug`、ラベル
+  「Genkai Broadcaster (debug)」) になり、release 版と同じ端末に共存できる。設定も別々に保存される。
+  この変更前の debug 版 (release と同じ ID) が端末に残っていると release 版をインストールできないので、一度削除する。
 
 ### 鍵の作成 (初回のみ、Android Studio)
 
@@ -190,5 +193,8 @@ grep -rn "旧シンボル名" app/src
   - `android.onlyEnableUnitTestForTheTestedBuildType=true`: 単体テストは debug のみ生成。`testDebugUnitTest` は従来通り。
   - `android.enableAppCompileTimeRClass=true`: アプリの `R` が非 final になる。`when` の分岐に `R.*` を使っていないので影響なし。
   - `android.sdk.defaultTargetSdkToCompileSdkIfUnset=true`: `targetSdk` は明示しているので影響なし。
+  - `buildFeatures` の `resValues` / `aidl` が既定で無効。`resValue(...)` を書くと
+    「defaultConfig contains custom resource values, but the feature is disabled」で configure が失敗するので、
+    使う機能は `buildFeatures { resValues = true }` のように明示する (2026-09-13 に有効化)。
 - 注意: `gradle-wrapper.jar` と `gradlew*` は 8.13 が生成したものをそのまま使っている (9.2.1 の取得・実行は可能)。
   揃えたい場合は `.\gradlew.bat wrapper --gradle-version 9.2.1` を一度実行してコミットする。
