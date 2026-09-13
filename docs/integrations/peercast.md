@@ -20,8 +20,6 @@ PeerCastStationとPeerCast Gatewayは、本アプリが対応するRTMP配信先
 
 - RTMP URL: `rtmp://pcgw.pgw.jp/live`、キーはチャンネル作成時に表示される4桁の数字。
 - ストリームタイプ FLV でチャンネル作成 → Gateway 側 Receiving で本番。
-- 歴史的経緯: Android からの Peca 配信は `AndroidPecaBroadcaster` 等があったが、
-  現行 Android ではインストール不可。汎用 RTMP アプリで Gateway を使うのが現実解。
 
 ## 視聴側プレーヤーの互換性
 
