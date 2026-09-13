@@ -1,7 +1,7 @@
 # 開発環境・ビルド
 
 リファクタリングの候補・優先順位・注意点は [refactoring.md](refactoring.md) を参照。
-UI変更は、[現在のUI仕様](../ui/current.md)で現状を確認し、[UI設計](../ui/design.md)を合意してから実装する。
+UI変更は、[現在のUI仕様](../ui/current.md)で現状を確認し、[UI設計判断](../ui/design.md)に判断と理由を追記してから実装する。
 
 ## 環境構成
 

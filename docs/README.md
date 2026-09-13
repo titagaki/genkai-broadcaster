@@ -30,4 +30,4 @@ Genkai Broadcasterの文書を目的別に分類しています。
 | 文書 | 役割 |
 |------|------|
 | [現在のUI仕様](ui/current.md) | 現在のCompose実装を基にした画面構成と操作 |
-| [UI設計](ui/design.md) | UIの設計判断、未決事項、確認項目 |
+| [UI設計判断](ui/design.md) | UI をなぜこの形にしたかの判断と理由、未決事項 |
