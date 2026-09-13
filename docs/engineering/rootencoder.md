@@ -52,6 +52,15 @@ API名に迷ったら利用中のタグ `2.8.1` の実ソースで裏を取っ�
 - `openCameraId()`と`openPhysicalCamera()`はCaptureSession構成完了を待たない。
   `setCustomOnCaptureCompletedCallback()`で新しいSessionの最初のCapture完了を検出する。
   固定解除・親変更・物理固定は1 Sessionずつ完了を待って進め、最終Sessionで選択確定と保存倍率の再適用を行う。
+- 手振れ補正: ライブラリの `enableVideoStabilization()` / `disableVideoStabilization()` は
+  `CONTROL_VIDEO_STABILIZATION_MODE_ON` を書くだけで、Android 13 の `PREVIEW_STABILIZATION` は選べない。
+  本アプリは `setCustomRequest { builder -> builder.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, mode) }`
+  (`Camera2Source.setCustomRequest`、内部で `setRepeatingRequest` まで行う) で自分でモードを書く。
+  光学式は `enableOpticalVideoStabilization()` 系だが本アプリは使わない。
+  `closeCamera()` で `builderInputSurface` が破棄され、開き直しでは `TEMPLATE_RECORD` から作り直されるので
+  設定は引き継がれない。本アプリはレンズ確定 (`CameraController.confirmLens`) のたびに適用し直す。
+  HAL が実際に適用したモードは `setCustomOnCaptureCompletedCallback` の `CaptureRequest` / `TotalCaptureResult`
+  から同キーで読める (本アプリはこれで「非対応」を判定する)。
 - 配信中ビットレート変更: `setVideoBitrateOnFly(bps)`。
 - 再接続: `getStreamClient().reTry(delay: Long, reason, backupUrl)`。delay は **Long**。
 - `reTry()` の `false` は配信本体の停止を意味しない。失敗確定時は `StreamBase.stopStream()` を明示的に呼ぶ。

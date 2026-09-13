@@ -48,6 +48,7 @@ import io.github.titagaki.genkaibroadcaster.streamer.StreamConfig
 import io.github.titagaki.genkaibroadcaster.streamer.StreamController
 import io.github.titagaki.genkaibroadcaster.streamer.StreamDestination
 import io.github.titagaki.genkaibroadcaster.streamer.StreamPrefs
+import io.github.titagaki.genkaibroadcaster.streamer.VideoStabilizationStatus
 
 /**
  * 設定のカテゴリ。トップのメニューから1階層だけ掘る構成にしている。
@@ -57,7 +58,7 @@ private enum class SettingsPage(val title: String, val subtitle: String, val ico
     STREAM("配信", "RTMPサーバーとストリームキー", Icons.Filled.CloudUpload),
     VIDEO("映像", "送信する映像の向きと画質", Icons.Filled.Videocam),
     COMMENT("コメント", "映像に載せるコメントの取得元", Icons.Filled.ChatBubbleOutline),
-    CAMERA("カメラ", "ズーム方式の診断 (デバッグビルド専用)", Icons.Filled.CameraAlt),
+    CAMERA("カメラ", "手振れ補正", Icons.Filled.CameraAlt),
     SETUP("権限", "カメラ・マイク・通知の権限を確認", Icons.Filled.VerifiedUser)
 }
 
@@ -95,6 +96,7 @@ fun SettingsScreen(
     var bitrateKbps by remember { mutableIntStateOf(prefs.loadBitrateKbps()) }
     var fps by remember { mutableIntStateOf(prefs.loadFps()) }
     var softwareEncoder by remember { mutableStateOf(prefs.loadSoftwareEncoder()) }
+    var videoStabilization by remember { mutableStateOf(prefs.loadVideoStabilization()) }
     var commentSourceKey by remember { mutableStateOf(prefs.loadCommentSource()) }
     var commentPosition by remember { mutableStateOf(prefs.loadCommentPosition()) }
     val appContext = LocalContext.current.applicationContext
@@ -164,7 +166,6 @@ fun SettingsScreen(
                     }
                     when (page) {
                         null -> SettingsMenu(
-                            debuggable = debuggable,
                             summaryOf = { target ->
                                 when (target) {
                                     SettingsPage.STREAM -> {
@@ -186,6 +187,12 @@ fun SettingsScreen(
                                         commentSources.firstOrNull { it.key == commentSourceKey }?.label ?: "なし",
                                         "右${commentPosition.label}"
                                     ).joinToString(" / ")
+                                    SettingsPage.CAMERA -> when {
+                                        !videoStabilization -> "手振れ補正: オフ"
+                                        streamState.videoStabilization == VideoStabilizationStatus.UNSUPPORTED ->
+                                            "手振れ補正: オン (このカメラは非対応)"
+                                        else -> "手振れ補正: オン"
+                                    }
                                     else -> target.subtitle
                                 }
                             },
@@ -249,10 +256,18 @@ fun SettingsScreen(
                             }
                         )
                         SettingsPage.CAMERA -> CameraPage(
-                            current = streamState.zoom.debugOverride,
-                            enabled = !isStreaming,
+                            stabilization = videoStabilization,
+                            stabilizationStatus = streamState.videoStabilization,
+                            onStabilizationChange = {
+                                videoStabilization = it
+                                prefs.saveVideoStabilization(it)
+                                controller.setVideoStabilization(it)
+                            },
+                            debuggable = debuggable,
+                            zoomOverride = streamState.zoom.debugOverride,
+                            zoomOverrideEnabled = !isStreaming,
                             diagnostics = controller.zoomDiagnostics(),
-                            onSelect = { controller.setZoomDebugOverride(it) }
+                            onZoomOverrideSelect = { controller.setZoomDebugOverride(it) }
                         )
                         SettingsPage.SETUP -> SetupPage(onRequestPermissions)
                     }
@@ -266,12 +281,10 @@ fun SettingsScreen(
 
 @Composable
 private fun SettingsMenu(
-    debuggable: Boolean,
     summaryOf: (SettingsPage) -> String,
     onSelect: (SettingsPage) -> Unit
 ) {
     SettingsPage.entries
-        .filter { it != SettingsPage.CAMERA || debuggable }
         .forEach { target ->
             Surface(
                 onClick = { onSelect(target) },

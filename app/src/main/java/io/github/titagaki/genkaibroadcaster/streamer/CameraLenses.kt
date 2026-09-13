@@ -17,6 +17,7 @@ import kotlin.math.roundToInt
  * @param fovDegrees 水平画角 (度)。算出不可時は null
  * @param isLogicalMultiCamera 複数の物理カメラを束ねた論理カメラなら true
  * @param physicalCameraId 論理カメラ内の特定物理レンズへ固定する場合のID
+ * @param videoStabilizationModes Capture 要求先 (cameraId) が受け付ける `CONTROL_VIDEO_STABILIZATION_MODE` の値
  */
 data class LensOption(
     val cameraId: String,
@@ -27,7 +28,8 @@ data class LensOption(
     val supportsAutoLens: Boolean = false,
     val physicalCameraId: String? = null,
     val minZoomRatio: Float = 1f,
-    val maxZoomRatio: Float = 1f
+    val maxZoomRatio: Float = 1f,
+    val videoStabilizationModes: List<Int> = emptyList()
 )
 
 /**
@@ -52,6 +54,9 @@ object CameraLenses {
                 val autoLens = logical && facing == CameraCharacteristics.LENS_FACING_BACK &&
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
                 val zoomRange = zoomRange(chars)
+                // 物理レンズ固定でも Capture 要求は論理カメラ (id) に出すので、補正モードは id の値を使う
+                val stabilizationModes = chars.get(CameraCharacteristics.CONTROL_AVAILABLE_VIDEO_STABILIZATION_MODES)
+                    ?.toList().orEmpty()
                 buildList {
                     add(
                         LensOption(
@@ -62,7 +67,8 @@ object CameraLenses {
                             isLogicalMultiCamera = logical,
                             supportsAutoLens = autoLens,
                             minZoomRatio = zoomRange.first,
-                            maxZoomRatio = zoomRange.second
+                            maxZoomRatio = zoomRange.second,
+                            videoStabilizationModes = stabilizationModes
                         )
                     )
                     if (logical && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -79,7 +85,8 @@ object CameraLenses {
                                     isFront = isFront,
                                     fovDegrees = physicalDegrees,
                                     minZoomRatio = physicalZoomRange.first,
-                                    maxZoomRatio = physicalZoomRange.second
+                                    maxZoomRatio = physicalZoomRange.second,
+                                    videoStabilizationModes = stabilizationModes
                                 )
                             )
                         }

@@ -37,6 +37,12 @@ object StreamConfig {
      */
     const val DEFAULT_SOFTWARE_ENCODER = true
 
+    /**
+     * 電子式手振れ補正 (Camera2 の `CONTROL_VIDEO_STABILIZATION_MODE`) を要求するか。
+     * 画角がわずかに狭くなり遅延が増える端末があるので既定はオフ。非対応カメラでは要求しても効かない。
+     */
+    const val DEFAULT_VIDEO_STABILIZATION = false
+
     // ---- Audio ----
     const val AUDIO_SAMPLE_RATE = 32000
     const val AUDIO_STEREO = true

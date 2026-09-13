@@ -25,6 +25,7 @@ class StreamPrefs(context: Context) {
         private const val KEY_FPS = "video_fps"
         private const val KEY_PORTRAIT = "stream_portrait"
         private const val KEY_SOFTWARE_ENCODER = "software_encoder"
+        private const val KEY_VIDEO_STABILIZATION = "video_stabilization"
         private const val KEY_COMMENT_SOURCE = "comment_source"
         private const val KEY_COMMENT_POSITION = "comment_position"
 
@@ -113,6 +114,13 @@ class StreamPrefs(context: Context) {
 
     fun saveSoftwareEncoder(software: Boolean) {
         prefs.edit().putBoolean(KEY_SOFTWARE_ENCODER, software).apply()
+    }
+
+    fun loadVideoStabilization(): Boolean =
+        prefs.getBoolean(KEY_VIDEO_STABILIZATION, StreamConfig.DEFAULT_VIDEO_STABILIZATION)
+
+    fun saveVideoStabilization(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_VIDEO_STABILIZATION, enabled).apply()
     }
 
     /**

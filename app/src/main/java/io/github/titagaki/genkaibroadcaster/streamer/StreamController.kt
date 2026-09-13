@@ -41,7 +41,7 @@ import kotlinx.coroutines.flow.update
 /**
  * RTMP配信の中核。RootEncoder の [GenericStream] を保持し、
  * プレビュー・配信開始/停止・マイク・自動再接続を担う。
- * カメラのレンズ切替とズームは [CameraController] に委譲し、UI 向けの入口だけをここに置く。
+ * カメラのレンズ切替・ズーム・手振れ補正は [CameraController] に委譲し、UI 向けの入口だけをここに置く。
  * コメント表示は配信中だけ [CommentSourceClient] で提供アプリに bind し、[CommentOverlay] で映像に載せる。
  *
  * - UI層はこのクラス経由でのみ配信機能に触ること (エンコーダAPIを直接叩かない)
@@ -81,6 +81,7 @@ class StreamController private constructor(context: Context) {
     private val camera by lazy {
         CameraController(
             catalog = LensCatalog(CameraLenses.list(appContext)),
+            initialStabilization = prefs.loadVideoStabilization(),
             host = object : CameraController.Host {
                 override val camera: Camera2Source? get() = genericStream?.videoSource as? Camera2Source
                 override val isOnPreview: Boolean get() = genericStream?.isOnPreview == true
@@ -431,6 +432,9 @@ class StreamController private constructor(context: Context) {
 
     /** 現在倍率を基準にピンチ操作の倍率変化を適用する。 */
     fun changeZoomBy(scale: Float): Float = camera.changeZoomBy(scale)
+
+    /** 手振れ補正 (電子式) の要求を変える。配信中でも即時反映する (保存は UI 側の StreamPrefs) */
+    fun setVideoStabilization(enabled: Boolean) = camera.setVideoStabilization(enabled)
 
     fun isDebuggable(): Boolean = BuildConfig.DEBUG
 

@@ -20,6 +20,12 @@ data class CameraZoomState(
     val debugOverride: ZoomDebugOverride = ZoomDebugOverride.AUTO
 )
 
+/**
+ * 手振れ補正 (電子式) がカメラに効いているか。要求値は [StreamPrefs] が持ち、ここには適用結果だけを載せる。
+ * UNSUPPORTED は「要求したが今のカメラが対応していない」。
+ */
+enum class VideoStabilizationStatus { OFF, ON, UNSUPPORTED }
+
 /** ユーザーに見せるズーム選択肢 (表示倍率 + それを実現するレンズ) */
 data class CameraZoomChoice(val ratio: Float, val lens: LensOption)
 
@@ -41,6 +47,8 @@ data class StreamState(
     val selectedLens: LensOption? = null,
     val cameraIsFront: Boolean = false,
     val cameraError: String? = null,
+    /** 手振れ補正の適用結果。レンズ確定のたびに更新する */
+    val videoStabilization: VideoStabilizationStatus = VideoStabilizationStatus.OFF,
     /** コメント提供アプリとの接続状態。配信中で設定があるときだけ Off 以外になる */
     val commentSource: CommentSourceState = CommentSourceState.Off
 )

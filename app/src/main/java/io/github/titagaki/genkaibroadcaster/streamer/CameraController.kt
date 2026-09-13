@@ -1,6 +1,8 @@
 package io.github.titagaki.genkaibroadcaster.streamer
 
 import android.hardware.camera2.CameraCaptureSession
+import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.CaptureResult
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -13,7 +15,7 @@ import java.util.Collections
 import java.util.IdentityHashMap
 
 /**
- * カメラ (RootEncoder の [Camera2Source]) のレンズ切替とズームを担当する。
+ * カメラ (RootEncoder の [Camera2Source]) のレンズ切替・ズーム・手振れ補正を担当する。
  *
  * レンズ切替は「再オープン → 最初の Capture 完了を待つ → 次の段階へ」を繰り返す状態機械で、
  * 途中の要求値 (pending/saved*) と UI に見せる確定状態 ([StreamState]) を区別する。
@@ -24,7 +26,8 @@ import java.util.IdentityHashMap
  */
 internal class CameraController(
     private val catalog: LensCatalog,
-    private val host: Host
+    private val host: Host,
+    initialStabilization: Boolean = StreamConfig.DEFAULT_VIDEO_STABILIZATION
 ) {
 
     /** [StreamController] が提供する足場 */
@@ -51,6 +54,14 @@ internal class CameraController(
     private var savedFront = false
     private var savedZoomRatio = 1f
     private var zoomDebugOverride = ZoomDebugOverride.AUTO
+    /** 手振れ補正の要求値。カメラを開き直すと Capture 設定が初期化されるので、レンズ確定のたびに適用し直す */
+    private var stabilizationRequested = initialStabilization
+    /** 直近のレンズ確定で Capture 要求に書いた補正モード。null は要求していない (非対応・オフ) */
+    @Volatile
+    private var stabilizationModeRequested: Int? = null
+    /** HAL が実際に適用した補正モード (CaptureResult)。カメラスレッドで更新し、変化時だけ状態へ反映する */
+    @Volatile
+    private var stabilizationModeApplied: Int? = null
 
     // ---- 切替の進行状態 ----
     private var activePhysicalCameraId: String? = null
@@ -143,8 +154,12 @@ internal class CameraController(
                 if (host.camera === camera) failLensChange("カメラが切断されました")
             }
         })
-        camera.setCustomOnCaptureCompletedCallback { session, _, _ ->
+        camera.setCustomOnCaptureCompletedCallback { session, request, result ->
             if (host.camera !== camera) return@setCustomOnCaptureCompletedCallback
+            observeStabilizationResult(
+                requested = request.get(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE),
+                applied = result.get(CaptureResult.CONTROL_VIDEO_STABILIZATION_MODE)
+            )
             val firstCapture = synchronized(seenCaptureSessions) { seenCaptureSessions.add(session) }
             if (!firstCapture) return@setCustomOnCaptureCompletedCallback
             val captureGeneration = awaitingCaptureGeneration ?: return@setCustomOnCaptureCompletedCallback
@@ -215,6 +230,7 @@ internal class CameraController(
         cameraCaptureReady = true
         val zoom = host.state.zoom
         applyZoom(camera, requestedZoom.coerceIn(zoom.minRatio, zoom.maxRatio))
+        applyStabilization(camera, lens)
     }
 
     private fun failLensChange(error: String) {
@@ -403,6 +419,73 @@ internal class CameraController(
         return applied
     }
 
+    // ---------- 手振れ補正 ----------
+
+    /**
+     * 電子式手振れ補正の要求を更新する。カメラが動いていれば即時適用し、
+     * 切替中・停止中なら次のレンズ確定時に適用する。
+     */
+    fun setVideoStabilization(enabled: Boolean) {
+        stabilizationRequested = enabled
+        val camera = host.camera ?: return
+        if (!camera.isRunning() || pendingLens != null || !cameraCaptureReady) return
+        applyStabilization(camera, host.state.selectedLens)
+    }
+
+    /**
+     * 要求値を Capture 要求へ書き、暫定の結果を [StreamState.videoStabilization] に載せる。
+     * 最終的な判定は HAL が返す CaptureResult ([observeStabilizationResult]) で行う。
+     *
+     * モードは `PREVIEW_STABILIZATION` (Android 13+) を優先する。RootEncoder の出力先は GL の SurfaceTexture で、
+     * HAL はこれをプレビュー用ストリームとして扱うため、`ON` だと録画用ストリームにしか補正を掛けない端末が多い。
+     * `PREVIEW_STABILIZATION` は RAW 以外の全ストリームに掛かる。
+     * 開き直した直後の Capture 設定 (TEMPLATE_RECORD) の既定は端末次第なので、オフ要求でも明示的に無効化する。
+     */
+    private fun applyStabilization(camera: Camera2Source, lens: LensOption?) {
+        val modes = lens?.videoStabilizationModes.orEmpty()
+        val mode = when {
+            !stabilizationRequested -> CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_PREVIEW_STABILIZATION in modes ->
+                CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_PREVIEW_STABILIZATION
+            CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON in modes ->
+                CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_ON
+            else -> null
+        }
+        stabilizationModeRequested = mode?.takeIf { it != CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF }
+        stabilizationModeApplied = null // 新しい要求に対する CaptureResult で判定し直す
+        val status = when {
+            mode == null -> VideoStabilizationStatus.UNSUPPORTED
+            mode == CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF -> VideoStabilizationStatus.OFF
+            else -> VideoStabilizationStatus.ON
+        }
+        if (mode != null) {
+            runCatching {
+                camera.setCustomRequest { it.set(CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE, mode) }
+            }.onFailure { Log.w(TAG, "video stabilization mode $mode failed", it) }
+        }
+        host.updateState { it.copy(videoStabilization = status) }
+    }
+
+    /**
+     * CaptureResult の補正モード (HAL が実際に適用した値) を記録し、要求と食い違えば状態を訂正する。
+     * オンを要求したのに OFF が返る端末は「非対応」として扱う。
+     * パイプラインに残った古い要求の結果を見ないよう、要求側 (CaptureRequest) が今の要求値のものだけ評価する。
+     * カメラスレッドから毎フレーム呼ばれるので、値が変わった時だけメインスレッドへ渡す。
+     */
+    private fun observeStabilizationResult(requested: Int?, applied: Int?) {
+        val wanted = stabilizationModeRequested ?: return
+        if (requested != wanted || applied == stabilizationModeApplied) return
+        stabilizationModeApplied = applied
+        onMainThreadHandler {
+            if (pendingLens != null || !cameraCaptureReady || stabilizationModeRequested != wanted) return@onMainThreadHandler
+            val effective = applied != null && applied != CaptureRequest.CONTROL_VIDEO_STABILIZATION_MODE_OFF
+            val status = if (effective) VideoStabilizationStatus.ON else VideoStabilizationStatus.UNSUPPORTED
+            if (!effective) Log.w(TAG, "video stabilization requested=$wanted but HAL applied=$applied")
+            host.updateState { it.copy(videoStabilization = status) }
+        }
+    }
+
     // ---------- デバッグ ----------
 
     fun zoomDiagnostics(): String {
@@ -410,8 +493,10 @@ internal class CameraController(
         val lens = currentLens()
         val cameraId = lens?.cameraId ?: "-"
         val physical = lens?.physicalCameraId?.let { " / physical $it" }.orEmpty()
+        val stabilization = "EIS modes ${lens?.videoStabilizationModes ?: "?"} / " +
+            "req ${stabilizationModeRequested ?: "-"} / applied ${stabilizationModeApplied ?: "-"}"
         return "API ${Build.VERSION.SDK_INT} / camera $cameraId$physical / ${zoom.mode.name} / " +
-            "${"%.2f".format(zoom.minRatio)}-${"%.2f".format(zoom.maxRatio)}x"
+            "${"%.2f".format(zoom.minRatio)}-${"%.2f".format(zoom.maxRatio)}x / $stabilization"
     }
 
     /** 両方のCapability分岐を強制確認する (デバッグビルド専用の入口は StreamController 側) */
