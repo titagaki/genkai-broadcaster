@@ -63,7 +63,8 @@ KGP も 2.4.x (AGP 〜9.3.1 対応) に上げるのが筋。別コミットで�
   厳密に見るなら `apksigner verify --print-certs <apk>` (build-tools 内) で証明書の CN を確認する。
 - 配布は GitHub Releases にタグ (`vX.Y.Z`) を切って `dist/` の APK を添付する (README のインストール手順とファイル名を合わせている)。
   例: `gh release create v0.1.0 app/build/outputs/dist/genkai-broadcaster-v0.1.0.apk --title "v0.1.0" --notes-file notes.md`
-- リリースごとに `versionCode` を +1、`versionName` をタグと合わせる。
+- 版は `app/build.gradle.kts` 先頭の `appVersion` だけを更新する。`versionCode` は `major*10000 + minor*100 + patch`
+  で自動算出 (0.2.0 → 200。JPNKN Vox と同じ規則)。v0.1.0 = 1、v0.1.1 = 2 は旧規則の +1 で公開済み。タグは `v<appVersion>`。
 
 ## アプリアイコン
 

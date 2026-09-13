@@ -5,6 +5,20 @@ plugins {
 
 import java.util.Properties
 
+val appVersion = "0.2.0"
+
+/**
+ * versionName から versionCode を作る (0.2.0 → 200、1.0.0 → 10000)。JPNKN Vox と同じ規則。
+ *
+ * versionCode は OS が「どちらが新しいか」を比べるためだけの整数で、小さい値の APK は上書きできない。
+ * 桁を固定せずに繋げると 0.1.10 (110) より 0.2.0 (20) が小さくなって逆転するため、
+ * minor と patch に 2 桁ずつ割り当てる (それぞれ 0〜99 まで)。
+ * v0.1.0 = 1、v0.1.1 = 2 は旧規則 (+1) で公開済みだが、200 以降はすべてそれより大きいので問題ない。
+ */
+val appVersionCode = appVersion.split(".")
+    .map { it.toInt() }
+    .let { (major, minor, patch) -> major * 10000 + minor * 100 + patch }
+
 // リリース署名の情報は keystore.properties (git 管理外) から読む。
 // 無ければ release は未署名のままビルドされる (署名鍵を持たない環境でもビルドを通すため)。
 val keystorePropertiesFile = rootProject.file("keystore.properties")
@@ -22,8 +36,8 @@ android {
         applicationId = "io.github.titagaki.genkaibroadcaster"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.2.0"
+        versionCode = appVersionCode
+        versionName = appVersion
 
         vectorDrawables {
             useSupportLibrary = true
@@ -106,7 +120,7 @@ dependencies {
 // AGP 9 では旧 applicationVariants API が無く、新 API の VariantOutput にも公開の
 // outputFileName が無いため、内部クラスに触らず Copy タスクで済ませる。
 val distReleaseApk = tasks.register<Copy>("distReleaseApk") {
-    val distName = "genkai-broadcaster-v${android.defaultConfig.versionName}.apk"
+    val distName = "genkai-broadcaster-v$appVersion.apk"
     from(layout.buildDirectory.dir("outputs/apk/release")) { include("app-release.apk") }
     into(layout.buildDirectory.dir("outputs/dist"))
     rename { distName }
